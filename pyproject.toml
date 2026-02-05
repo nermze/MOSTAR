@@ -3,16 +3,12 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "hypol-asm"
+name = "mostar-asm"
 version = "1.0.0"
-description = "A streamlined hybrid assembly and polishing pipeline for ONT and Illumina reads"
+description = "A streamlined hybrid assembly and polishing pipeline for ONT and Illumina reads, includes AMR profiling and functional annotation"
 authors = [{name = "Nermin Zecic", email = "nermze@gmail.com"}]
 readme = "README.md"
 license = {text = "MIT"}
-classifiers = [
-    "Programming Language :: Unix Shell",
-    "Topic :: Scientific/Engineering :: Bio-Informatics"
-]
 
-[project.scripts]
-hypol-asm = "hypol_asm"
+[tool.setuptools]
+script-files = ["mostar"]

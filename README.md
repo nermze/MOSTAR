@@ -10,7 +10,8 @@ The HyPol-ASM pipeline performs the following steps:
 5. Automated AMR: AMRFinder+ resistance profile
 6. Generates standardized GFF3, GBK, and FASTA outputs.
 
-# Installation(Bioconda)
+
+# Installation (Conda or Mamba)
 <pre>
 Clone the repository:
 git clone https://github.com/nermze/HyPol-ASM.git
@@ -26,6 +27,10 @@ conda activate hypol-env
 
 Install using pip:
 pip install . 
+
+### Important! ###
+Download AMRFinder+ database: 
+amrfinder -u
 </pre>
 
 Basic Usage:

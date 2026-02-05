@@ -1,4 +1,4 @@
-# HyPol-ASM
+# HyPol-ASM (Hybrid Polishing Assembly)
 
 HyPol-ASM is an end-to-end bioinformatics pipeline designed for the de novo assembly, polishing, and functional profiling of bacterial genomes. By integrating the long-read scaffold capabilities of Oxford Nanopore Technologies (ONT) with the superior base-pair accuracy of Illumina short-reads, the pipeline generates polished assemblies. Beyond sequence generation, HyPol-ASM automates functional annotation and antimicrobial resistance (AMR) gene detection, providing immediate biological insights into clinical and environmental isolates.
 

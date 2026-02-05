@@ -12,24 +12,24 @@ The HyPol-ASM pipeline performs the following steps:
 # Installation(Bioconda)
 <pre>
 Clone the repository:
-# git clone https://github.com/nermze/HyPol-ASM.git
+git clone https://github.com/nermze/HyPol-ASM.git
 
 Change dir:
-# cd HyPol-ASM
+cd HyPol-ASM
 
 Create a conda env with all dependencies from the provided yml:
-# conda env create -f environment.yml
+conda env create -f environment.yml
 
 Activate the environment:
-# conda activate hypol-env
+conda activate hypol-env
 
 Install using pip:
-# pip install . 
+pip install . 
 </pre>
 
 Basic Usage:
 <pre>
-# hypol-asm -1 R1.fastq.gz -2 R2.fastq.gz -n long_reads.fastq.gz -g 2.1m -o results
+hypol-asm -1 R1.fastq.gz -2 R2.fastq.gz -n long_reads.fastq.gz -g 2.1m -o results
 </pre>
 
 Recuired arguments:

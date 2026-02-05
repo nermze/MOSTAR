@@ -9,12 +9,12 @@ The HyPol-ASM pipeline performs the following steps:
 4. Automated Annotation: Full functional annotation with Prokka. 
 5. Generates standardized GFF3, GBK, and FASTA outputs.
 
-Installation (Conda or Mamba)
+# Installation (Conda or Mamba)
 
 Clone the repository
-# git clone https://github.com/nermze/HyPol-ASM.git
+<git clone https://github.com/nermze/HyPol-ASM.git>
 Change dir 
-# cd HyPol-ASM
+<cd HyPol-ASM>
 
 Create a conda env with all dependencies from the provided yml
 # conda env create -f environment.yml

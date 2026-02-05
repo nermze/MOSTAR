@@ -1,6 +1,6 @@
 # HyPol-ASM
 
-HyPol-ASM is a streamlined bioinformatics pipeline designed for assembly of bacterial genomes. By leveraging the long-read capabilities of Oxford Nanopore Technologies (ONT) and the high base-pair accuracy of Illumina short-reads, it produces a polished fasta in addition to annotation. 
+HyPol-ASM is a streamlined bioinformatics pipeline designed for assembly of bacterial genomes. By leveraging the long-read capabilities of Oxford Nanopore Technologies (ONT) and the high base-pair accuracy of Illumina short-reads, it produces both a highly polished fasta in addition to all the annotaion files with PROKKA. 
 
 The HyPol-ASM pipeline performs the following steps:
 1. Dual-Stage QC: Automated adapter trimming (fastp) and length-based long-read filtering (Filtlong).

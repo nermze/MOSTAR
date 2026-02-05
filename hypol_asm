@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+set -e
+
+# HyPol-ASM: Hybrid Assembly and Polishing Pipeline
+# Author: Nermin
+
+usage() {
+    echo "HyPol-ASM: Hybrid Assembly and Polishing Pipeline"
+    echo "Usage: hypol-asm -1 R1.fq.gz -2 R2.fq.gz -n ont.fq.gz -o output_dir"
+    echo ""
+    echo "Options:"
+    echo "  -1  Illumina R1 (Short reads)"
+    echo "  -2  Illumina R2 (Short reads)"
+    echo "  -n  ONT Long reads"
+    echo "  -o  Output directory"
+    echo "  -t  Threads (Default: 10)"
+    echo "  -m  Medaka model (Default: r1041_e82_400bps_sup_v5.2.0)"
+    exit 1
+}
+
+THREADS=10
+MEDAKA_MODEL="r1041_e82_400bps_sup_v5.2.0"
+
+while getopts "1:2:n:o:t:m:h" opt; do
+    case ${opt} in
+        1) R1=$OPTARG ;;
+        2) R2=$OPTARG ;;
+        n) ONT=$OPTARG ;;
+        o) OUTDIR=$OPTARG ;;
+        t) THREADS=$OPTARG ;;
+        m) MEDAKA_MODEL=$OPTARG ;;
+        h) usage ;;
+        *) usage ;;
+    esac
+done
+
+if [[ -z "$R1" || -z "$R2" || -z "$ONT" || -z "$OUTDIR" ]]; then usage; fi
+
+# Create directory structure
+mkdir -p "$OUTDIR/intermediate" "$OUTDIR/logs"
+
+echo "[$(date +%T)] 1/5: Short-read QC (fastp)..."
+fastp --in1 "$R1" --in2 "$R2" \
+      --out1 "$OUTDIR/intermediate/sh_R1.fq.gz" --out2 "$OUTDIR/intermediate/sh_R2.fq.gz" \
+      --thread "$THREADS" --json "$OUTDIR/logs/fastp.json" --html "$OUTDIR/logs/fastp.html" > /dev/null 2>&1
+
+echo "[$(date +%T)] 2/5: Long-read filtering (filtlong)..."
+filtlong --min_length 1000 --keep_percent 90 "$ONT" | gzip > "$OUTDIR/intermediate/ont_filt.fq.gz"
+
+echo "[$(date +%T)] 3/5: De Novo Assembly (Flye)..."
+flye --nano-hq "$OUTDIR/intermediate/ont_filt.fq.gz" --threads "$THREADS" --out-dir "$OUTDIR/flye"
+
+echo "[$(date +%T)] 4/5: Long-read polishing (Medaka)..."
+medaka_consensus -i "$OUTDIR/intermediate/ont_filt.fq.gz" -d "$OUTDIR/flye/assembly.fasta" \
+                 -m "$MEDAKA_MODEL" -t "$THREADS" -o "$OUTDIR/medaka"
+
+echo "[$(date +%T)] 5/5: Final Hybrid Polishing (BWA + Polypolish)..."
+bwa index "$OUTDIR/medaka/consensus.fasta" > /dev/null 2>&1
+bwa mem -t "$THREADS" "$OUTDIR/medaka/consensus.fasta" "$OUTDIR/intermediate/sh_R1.fq.gz" > "$OUTDIR/intermediate/1.sam"
+bwa mem -t "$THREADS" "$OUTDIR/medaka/consensus.fasta" "$OUTDIR/intermediate/sh_R2.fq.gz" > "$OUTDIR/intermediate/2.sam"
+
+polypolish filter --in1 "$OUTDIR/intermediate/1.sam" --in2 "$OUTDIR/intermediate/2.sam" \
+                  --out1 "$OUTDIR/intermediate/f1.sam" --out2 "$OUTDIR/intermediate/f2.sam"
+
+polypolish polish "$OUTDIR/medaka/consensus.fasta" "$OUTDIR/intermediate/f1.sam" "$OUTDIR/intermediate/f2.sam" > "$OUTDIR/HyPol_Final_Assembly.fasta"
+
+echo "[$(date +%T)] SUCCESS: Assembly complete. Output: $OUTDIR/HyPol_Final_Assembly.fasta"

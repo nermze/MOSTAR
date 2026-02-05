@@ -10,6 +10,17 @@ The HyPol-ASM pipeline performs the following steps:
 5. Automated AMR: AMRFinder+ resistance profile
 6. Generates standardized GFF3, GBK, and FASTA outputs.
 
+# Requirments (Installed by yml)
+1. Fastp
+2. Flye
+3. Medaka
+4. BWA
+5. AMRFinder+
+6. PROKKA
+7. Polypolish
+8. Filtlong
+9. Samtools
+10. Minimap2
 
 # Installation (Conda or Mamba)
 <pre>
@@ -52,3 +63,9 @@ hypol-asm -1 R1.fastq.gz -2 R2.fastq.gz -n long_reads.fastq.gz -g 2.1m -a refere
 | `-a` | Reference | (Optional) Reference .gbk for Prokka |
 | `-o` | Output | Directory name for output files |
 
+
+# Maintaner and author
+[![GitHub](https://img.shields.io/badge/GitHub-nermze-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/nermze)
+
+Developed and maintained by **Nermin** ([@nermze](https://github.com/nermze)). 
+For questions, bugs, or feature requests, please open an [Issue](https://github.com/nermze/HyPol-ASM/issues).

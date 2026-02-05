@@ -1,6 +1,6 @@
 # MOSTAR-ASM (Multimodal ONT and Short-read Tool for Assembly and Refinement)
 
-MOSTAR-ASM is a comprehensive bioinformatics pipeline designed to bridge the gap between long-read structural continuity and short-read base-pair accuracy. By integrating Oxford Nanopore Technologies (ONT) with Illumina sequencing, the pipeline reconstructs highly polished bacterial genomes through an automated de novo assembly, annotation and AMR profiling.  
+MOSTAR-ASM is a comprehensive bioinformatics pipeline designed to bridge the gap between long-read structural continuity and short-read base-pair accuracy. By integrating Oxford Nanopore Technologies (ONT) with Illumina sequencing, the pipeline reconstructs highly polished bacterial genomes through an automated de novo assembly, annotation and AMR profiling. The pipeline is also compatible with Apple Silicone (M-series).  
 
 The HyPol-ASM pipeline performs the following steps:
 1. Dual-Stage QC: Automated adapter trimming (fastp) and length-based long-read filtering (Filtlong).
@@ -23,15 +23,6 @@ Linux
 8. Filtlong
 9. Samtools
 10. Minimap2
-
-# Apple Silicone Users:
-<pre>
-Please create the environment using Intel-emulation (Rosetta 2) with the following command:
-  
-CONDA_SUBDIR=osx-64 conda env create -f environment.yml
-conda activate hypol_env
-conda config --env --set subdir osx-64
-</pre>
   
 # Installation (Conda or Mamba)
 <pre>
@@ -53,6 +44,15 @@ pip install .
 ### Important! ###
 Download AMRFinder+ database: 
 amrfinder -u
+</pre>
+
+# Apple Silicone Users:
+<pre>
+Please create the environment using Intel-emulation (Rosetta 2) with the following command:
+  
+CONDA_SUBDIR=osx-64 conda env create -f environment.yml
+conda activate hypol_env
+conda config --env --set subdir osx-64
 </pre>
 
 Basic Usage:
@@ -77,10 +77,14 @@ hypol-asm -1 R1.fastq.gz -2 R2.fastq.gz -n long_reads.fastq.gz -g 2.1m -a refere
 
 # Output Structure
 
-The pipeline produces the following output files depending on specified flags:
-1. HyPol_Assembly.fasta: Final polished genome.
-2. amr_results/AMR_Report.tsv: Detected AMR genes and virulence factors.
-3. annotation/: Full functional annotation suite (GFF3, GBK, FAA).
+The pipeline produces the following output files in the results folder:
+1. amr_results/AMR_Report.tsv: Detected AMR genes and virulence factors.
+2. annotation/: Full functional annotation suite (GFF3, GBK, FAA).
+3. flye: De novo assembly
+4. Intermediate
+5. Logs
+6. MEDAKA
+7. MOSTAR_Assembly.fasta: Final polished genome.
 
 
 

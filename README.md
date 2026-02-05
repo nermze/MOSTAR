@@ -7,7 +7,7 @@ The HyPol-ASM pipeline performs the following steps:
 2. De Novo Assembly: High-performance assembly using Flye's nano-hq parameters.
 3. Multi-Step Polishing: Long-read consensus correction with Medaka followed by short-read structural polishing via BWA and Polypolish.
 4. Automated Annotation: Full functional annotation with Prokka.
-5. Automated AMR: AMRFinder+ resistance profile
+5. Automated AMR: AMRFinder+ resistance profile (tsv)
 6. Generates standardized GFF3, GBK, and FASTA outputs.
 
 # Requirments (Installed by yml)
@@ -62,6 +62,18 @@ hypol-asm -1 R1.fastq.gz -2 R2.fastq.gz -n long_reads.fastq.gz -g 2.1m -a refere
 | `-g` | Genome Size | Estimated size (e.g., 2.1m) |
 | `-a` | Reference | (Optional) Reference .gbk for Prokka |
 | `-o` | Output | Directory name for output files |
+
+
+# Output Structure
+<pre>
+
+HyPol_Assembly.fasta: Final polished genome.
+
+amr_results/AMR_Report.tsv: Detected AMR genes and virulence factors.
+
+annotation/: Full functional annotation suite (GFF3, GBK, FAA).
+</pre>
+
 
 
 # Maintaner and author

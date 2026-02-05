@@ -25,16 +25,16 @@ The HyPol-ASM pipeline performs the following steps:
 # Installation (Conda or Mamba)
 <pre>
 Clone the repository:
-git clone https://github.com/nermze/HyPol-ASM.git
+git clone https://github.com/nermze/MOSTAR-ASM.git
 
 Change dir:
-cd HyPol-ASM
+cd MOSTAR-ASM
 
 Create a conda env with all dependencies from the provided yml:
 conda env create -f environment.yml
 
 Activate the environment:
-conda activate hypol-env
+conda activate mostar-env
 
 Install using pip:
 pip install . 

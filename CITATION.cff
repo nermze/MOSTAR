@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors: 
+- family-names: "Zecic"
+  given-names: "Nermin"
+  orcid: "https://orcid.org/0009-0008-0687-424X"
+- family-names: "Skaare"
+  given-names: "Dagfinn"
+  orcid: "https://orcid.org/0009-0009-4084-4156"
+- family-names: "Johannessen Wefring"
+  given-names: "Helene"
+  orcid: "https://orcid.org/0000-0002-1743-5321"
+- family-names: "Taksdal Stubhaug"
+  given-names: "Tore"
+  orcid: "https://orcid.org/0000-0002-9234-7532"
+title: "HyPol-ASM: A Streamlined Hybrid Assembly and Polishing Pipeline"
+version: 1.0.0
+date-released: 2026-02-05
+url: "https://github.com/YourUsername/HyPol-ASM"

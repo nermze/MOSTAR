@@ -100,5 +100,5 @@ The pipeline produces the following output files in the results folder:
 # Maintaner and author
 [![GitHub](https://img.shields.io/badge/GitHub-nermze-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/nermze)
 
-Developed and maintained by **Nermin** ([@nermze](https://github.com/nermze)). 
+Developed and maintained by **Nermin Zecic** ([@nermze](https://github.com/nermze)). 
 For questions, bugs, or feature requests, please open an [Issue](https://github.com/nermze/HyPol-ASM/issues).

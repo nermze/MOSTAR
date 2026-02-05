@@ -11,6 +11,8 @@ The HyPol-ASM pipeline performs the following steps:
 6. Generates standardized GFF3, GBK, and FASTA outputs.
 
 # Requirments (Installed by yml)
+
+Linux
 1. Fastp
 2. Flye
 3. Medaka
@@ -22,6 +24,15 @@ The HyPol-ASM pipeline performs the following steps:
 9. Samtools
 10. Minimap2
 
+# Apple Silicone Users:
+<pre>
+Please create the environment using Intel-emulation (Rosetta 2) with the following command:
+  
+CONDA_SUBDIR=osx-64 conda env create -f environment.yml
+conda activate hypol_env
+conda config --env --set subdir osx-64
+</pre>
+  
 # Installation (Conda or Mamba)
 <pre>
 Clone the repository:

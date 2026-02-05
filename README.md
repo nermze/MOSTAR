@@ -26,8 +26,9 @@ Install using pip
 # pip install . 
 
 
-Basic usage:
-hypol-asm -1 R1.fastq.gz -2 R2.fastq.gz -n ont_reads.fastq.gz -g 2.1m -o my_assembly_output
+\`\`\`bash
+hypol-asm -1 R1.fastq.gz -2 R2.fastq.gz -n long_reads.fastq.gz -g 2.1m -o results
+\`\`\`
 
 Recuired arguments:
 Flag  Argument    Description

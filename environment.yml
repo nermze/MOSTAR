@@ -1,4 +1,4 @@
-name: hypol-env
+name: mostar-env
 channels:
   - conda-forge
   - bioconda
@@ -12,6 +12,9 @@ dependencies:
   - bwa
   - polypolish
   - prokka
+  - perl-xml-simple   
+  - perl-time-hires    
+  - perl-digest-md5    
   - ncbi-amrfinderplus
   - samtools
   - minimap2

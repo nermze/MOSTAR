@@ -1,4 +1,4 @@
-name: hypol_env
+name: hypol-env
 channels:
   - conda-forge
   - bioconda

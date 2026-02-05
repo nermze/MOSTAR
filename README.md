@@ -81,13 +81,21 @@ The pipeline produces the following output files in the results folder:
 1. amr_results/AMR_Report.tsv: Detected AMR genes and virulence factors.
 2. annotation/: Full functional annotation suite (GFF3, GBK, FAA).
 3. flye: De novo assembly
-4. Intermediate
+4. Intermediate 
 5. Logs
-6. MEDAKA
-7. MOSTAR_Assembly.fasta: Final polished genome.
+6. MEDAKA - 
+7. MOSTAR_Assembly.fasta: 
 
-
-
+### Command-Line Arguments
+| File | Type | Description |
+| :--- | :--- | :--- |
+| `1` | amr_results | NCBI AMRFinder+ results |
+| `2` | annotation | Annotations by PROKKA |
+| `3` | flye | De-novo assembly |
+| `4` | Intermediate  | Temporary and intermediate files |
+| `5` | Logs | Run log |
+| `6` | MEDAKA | Consensus sequence |
+| `7` | MOSTAR_Assembly.fasta | Final polished genome. |
 
 # Maintaner and author
 [![GitHub](https://img.shields.io/badge/GitHub-nermze-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/nermze)

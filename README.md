@@ -58,10 +58,10 @@ conda config --env --set subdir osx-64
 Basic Usage:
 <pre>
 Assembly & polish:
-hypol-asm -1 R1.fastq.gz -2 R2.fastq.gz -n long_reads.fastq.gz -g 2.1m -o results
+mostar -1 R1.fastq.gz -2 R2.fastq.gz -n long_reads.fastq.gz -g 2.1m -o results
 
 Assembly, polish and annotate:
-hypol-asm -1 R1.fastq.gz -2 R2.fastq.gz -n long_reads.fastq.gz -g 2.1m -a reference.gbk -o results
+mostar -1 R1.fastq.gz -2 R2.fastq.gz -n long_reads.fastq.gz -g 2.1m -a reference.gbk -o results
 </pre>
 
 ### Command-Line Arguments

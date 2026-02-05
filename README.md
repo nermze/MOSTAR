@@ -32,9 +32,7 @@ Basic Usage:
 hypol-asm -1 R1.fastq.gz -2 R2.fastq.gz -n long_reads.fastq.gz -g 2.1m -o results
 </pre>
 
-Recuired arguments:
 ### Command-Line Arguments
-
 | Flag | Name | Description |
 | :--- | :--- | :--- |
 | `-1` | Illumina R1 | Forward short-reads (.fastq.gz) |
@@ -43,3 +41,4 @@ Recuired arguments:
 | `-g` | Genome Size | Estimated size (e.g., 2.1m) |
 | `-a` | Reference | (Optional) Reference .gbk for Prokka |
 | `-o` | Output | Directory name for output files |
+

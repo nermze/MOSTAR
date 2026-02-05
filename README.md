@@ -10,7 +10,7 @@ The HyPol-ASM pipeline performs the following steps:
 5. Generates standardized GFF3, GBK, and FASTA outputs.
 
 # Installation (Conda or Mamba)
-
+<pre>
 Clone the repository
 <git clone https://github.com/nermze/HyPol-ASM.git>
 Change dir 
@@ -24,11 +24,12 @@ Activate the environment
 
 Install using pip
 # pip install . 
+</pre>
 
-
-\`\`\`bash
+# Basic Usage:
+<pre>
 hypol-asm -1 R1.fastq.gz -2 R2.fastq.gz -n long_reads.fastq.gz -g 2.1m -o results
-\`\`\`
+</pre>
 
 Recuired arguments:
 Flag  Argument    Description

@@ -11,6 +11,7 @@ dependencies:
   - medaka
   - bwa
   - polypolish
+  - prokka
   - samtools
   - minimap2
   - pip

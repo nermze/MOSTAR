@@ -33,16 +33,16 @@ hypol-asm -1 R1.fastq.gz -2 R2.fastq.gz -n long_reads.fastq.gz -g 2.1m -o result
 </pre>
 
 Recuired arguments:
-Flag  Argument    Description
--1   <file>       # Path to Illumina Forward reads (R1.fastq.gz)
--2   <file>       # Path to Illumina Reverse reads (R2.fastq.gz)
--n   <file>       # Path to Nanopore long reads (fastq.gz)
--g   <size>       # Estimated genome size (e.g., 2.1m, 5.0m)
--o   <path>       # Specify name of output directory 
+### Command-Line Arguments
 
-Optional arguments: 
-Flag  Argument  Default  Description
--a	<file>	    None	   # Path to reference .gbk
--t  <int>       10       # Number of CPU threads
--m  <model>     r1041    # Medaka model (match your ONT flowcell/kit)
--h  N/A         N/A      # Display the help menu
+| Flag | Argument | Default | Description |
+| :--- | :--- | :--- | :--- |
+| **`-1`** | `<file>` | **Required** | Forward Illumina short-reads (`.fastq.gz`) |
+| **`-2`** | `<file>` | **Required** | Reverse Illumina short-reads (`.fastq.gz`) |
+| **`-n`** | `<file>` | **Required** | Nanopore long-reads (`.fastq.gz`) |
+| **`-g`** | `<string>` | **Required** | Estimated genome size (e.g., `2.1m` or `5.0m`) |
+| **`-o`** | `<path>` | **Required** | Output directory for all results |
+| **`-a`** | `<file>` | `None` | Optional: Reference GenBank/FASTA for Prokka annotation |
+| **`-t`** | `<int>` | `10` | Number of CPU threads to utilize |
+| **`-m`** | `<string>` | `r1041...` | Medaka model (must match ONT chemistry) |
+| **`-h`** | N/A | N/A | Display this help menu and exit |

@@ -74,19 +74,7 @@ hypol-asm -1 R1.fastq.gz -2 R2.fastq.gz -n long_reads.fastq.gz -g 2.1m -a refere
 | `-a` | Reference | (Optional) Reference .gbk for Prokka |
 | `-o` | Output | Directory name for output files |
 
-
-# Output Structure
-
-The pipeline produces the following output files in the results folder:
-1. amr_results/AMR_Report.tsv: Detected AMR genes and virulence factors.
-2. annotation/: Full functional annotation suite (GFF3, GBK, FAA).
-3. flye: De novo assembly
-4. Intermediate 
-5. Logs
-6. MEDAKA - 
-7. MOSTAR_Assembly.fasta: 
-
-### Command-Line Arguments
+### Output and folder structure
 | File | Type | Description |
 | :--- | :--- | :--- |
 | `1` | amr_results | NCBI AMRFinder+ results |

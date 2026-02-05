@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/mostar_new.jpg" 
+  <img src="assets/mostar_bridge_banner.png" 
        width="100%" 
        style="height: 300px; object-fit: cover; object-position: top;" 
        alt="MOSTAR-ASM Banner">

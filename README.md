@@ -51,7 +51,7 @@ amrfinder -u
 Please create the environment using Intel-emulation (Rosetta 2) with the following command:
   
 CONDA_SUBDIR=osx-64 conda env create -f environment.yml
-conda activate hypol_env
+conda activate mostar_env
 conda config --env --set subdir osx-64
 </pre>
 

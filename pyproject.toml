@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mostar-asm"
+name = "mostar"
 version = "1.0.0"
 description = "A streamlined hybrid assembly and polishing pipeline for ONT and Illumina reads, includes AMR profiling and functional annotation"
 authors = [{name = "Nermin Zecic", email = "nermze@gmail.com"}]
@@ -11,4 +11,4 @@ readme = "README.md"
 license = {text = "MIT"}
 
 [tool.setuptools]
-script-files = ["mostar"]
+script-files = ["mostar-asm"]

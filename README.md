@@ -35,14 +35,11 @@ hypol-asm -1 R1.fastq.gz -2 R2.fastq.gz -n long_reads.fastq.gz -g 2.1m -o result
 Recuired arguments:
 ### Command-Line Arguments
 
-| Flag | Argument | Default | Description |
-| :--- | :--- | :--- | :--- |
-| **`-1`** | `<file>` | **Required** | Forward Illumina short-reads (`.fastq.gz`) |
-| **`-2`** | `<file>` | **Required** | Reverse Illumina short-reads (`.fastq.gz`) |
-| **`-n`** | `<file>` | **Required** | Nanopore long-reads (`.fastq.gz`) |
-| **`-g`** | `<string>` | **Required** | Estimated genome size (e.g., `2.1m` or `5.0m`) |
-| **`-o`** | `<path>` | **Required** | Output directory for all results |
-| **`-a`** | `<file>` | `None` | Optional: Reference GenBank/FASTA for Prokka annotation |
-| **`-t`** | `<int>` | `10` | Number of CPU threads to utilize |
-| **`-m`** | `<string>` | `r1041...` | Medaka model (must match ONT chemistry) |
-| **`-h`** | N/A | N/A | Display this help menu and exit |
+| Flag | Name | Description |
+| :--- | :--- | :--- |
+| `-1` | Illumina R1 | Forward short-reads (.fastq.gz) |
+| `-2` | Illumina R2 | Reverse short-reads (.fastq.gz) |
+| `-n` | ONT Reads | Nanopore long-reads (.fastq.gz) |
+| `-g` | Genome Size | Estimated size (e.g., 2.1m) |
+| `-a` | Reference | (Optional) Reference .gbk for Prokka |
+| `-o` | Output | Directory name for output files |

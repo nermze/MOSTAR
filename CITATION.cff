@@ -13,7 +13,7 @@ authors:
 - family-names: "Taksdal Stubhaug"
   given-names: "Tore"
   orcid: "https://orcid.org/0000-0002-9234-7532"
-title: "HyPol-ASM: A Streamlined Hybrid Assembly and Polishing Pipeline"
+title: "MOSTAR-ASM: A Streamlined Hybrid Assembly and Polishing Pipeline"
 version: 1.0.0
 date-released: 2026-02-05
 url: "https://github.com/YourUsername/HyPol-ASM"

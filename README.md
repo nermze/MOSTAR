@@ -1,6 +1,6 @@
-# HyPol-ASM (Hybrid Polishing Assembly for ONT-reads)
+# MOSTAR-ASM (Multimodal ONT and Short-read Tool for Assembly and Refinement)
 
-HyPol-ASM is an end-to-end bioinformatics pipeline designed for the de novo assembly, polishing, and functional profiling of bacterial genomes. By integrating the long-read scaffold capabilities of Oxford Nanopore Technologies (ONT) with the superior base-pair accuracy of Illumina short-reads, the pipeline generates polished assemblies. Beyond sequence generation, HyPol-ASM automates functional annotation and antimicrobial resistance (AMR) gene detection, providing immediate biological insights into clinical and environmental isolates.
+MOSTAR-ASM is a comprehensive bioinformatics pipeline designed to bridge the gap between long-read structural continuity and short-read base-pair accuracy. By integrating Oxford Nanopore Technologies (ONT) with Illumina sequencing, the pipeline reconstructs highly polished bacterial genomes through an automated de novo assembly, annotation and AMR profiling.  
 
 The HyPol-ASM pipeline performs the following steps:
 1. Dual-Stage QC: Automated adapter trimming (fastp) and length-based long-read filtering (Filtlong).

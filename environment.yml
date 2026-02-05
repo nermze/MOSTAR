@@ -12,6 +12,7 @@ dependencies:
   - bwa
   - polypolish
   - prokka
+  - ncbi-amrfinderplus
   - samtools
   - minimap2
   - pip

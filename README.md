@@ -1,13 +1,14 @@
 # HyPol-ASM
 
-HyPol-ASM is a streamlined bioinformatics pipeline designed for assembly of bacterial genomes. By leveraging the long-read capabilities of Oxford Nanopore Technologies (ONT) and the high base-pair accuracy of Illumina short-reads, it produces both a highly polished fasta in addition to all the annotaion files with PROKKA. 
+HyPol-ASM is an end-to-end bioinformatics pipeline designed for the de novo assembly, polishing, and functional profiling of bacterial genomes. By integrating the long-read scaffold capabilities of Oxford Nanopore Technologies (ONT) with the superior base-pair accuracy of Illumina short-reads, the pipeline generates polished assemblies. Beyond sequence generation, HyPol-ASM automates functional annotation and antimicrobial resistance (AMR) gene detection, providing immediate biological insights into clinical and environmental isolates.
 
 The HyPol-ASM pipeline performs the following steps:
 1. Dual-Stage QC: Automated adapter trimming (fastp) and length-based long-read filtering (Filtlong).
 2. De Novo Assembly: High-performance assembly using Flye's nano-hq parameters.
 3. Multi-Step Polishing: Long-read consensus correction with Medaka followed by short-read structural polishing via BWA and Polypolish.
-4. Automated Annotation: Full functional annotation with Prokka. 
-5. Generates standardized GFF3, GBK, and FASTA outputs.
+4. Automated Annotation: Full functional annotation with Prokka.
+5. Automated AMR: AMRFinder+ resistance profile
+6. Generates standardized GFF3, GBK, and FASTA outputs.
 
 # Installation(Bioconda)
 <pre>
@@ -29,7 +30,11 @@ pip install .
 
 Basic Usage:
 <pre>
+Assembly & polish:
 hypol-asm -1 R1.fastq.gz -2 R2.fastq.gz -n long_reads.fastq.gz -g 2.1m -o results
+
+Assembly, polish and annotate:
+hypol-asm -1 R1.fastq.gz -2 R2.fastq.gz -n long_reads.fastq.gz -g 2.1m -a reference.gbk -o results
 </pre>
 
 ### Command-Line Arguments

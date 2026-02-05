@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/mostar.png" width="100%" alt="MOSTAR-ASM Banner">
+  <img src="assets/mostar.png" width="100%" height="50%" alt="MOSTAR-ASM Banner">
 </p>
 
 

@@ -2,7 +2,7 @@
 
 MOSTAR-ASM is a comprehensive bioinformatics pipeline designed to bridge the gap between long-read structural continuity and short-read base-pair accuracy. By integrating Oxford Nanopore Technologies (ONT) with Illumina sequencing, the pipeline reconstructs highly polished bacterial genomes through an automated de novo assembly, annotation and AMR profiling. The pipeline is also compatible with Apple Silicone (M-series).  
 
-The HyPol-ASM pipeline performs the following steps:
+The pipeline performs the following steps:
 1. Dual-Stage QC: Automated adapter trimming (fastp) and length-based long-read filtering (Filtlong).
 2. De Novo Assembly: High-performance assembly using Flye's nano-hq parameters.
 3. Multi-Step Polishing: Long-read consensus correction with Medaka followed by short-read structural polishing via BWA and Polypolish.

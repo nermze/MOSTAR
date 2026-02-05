@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 set -e
 
-# --- Professional Help Menu ---
+# --- Help Menu ---
 usage() {
     echo "======================================================================="
-    echo "  HyPol-ASM: Assembly, Polishing, Annotation & AMR (v1.3.0)"
+    echo "  
+    echi "     Mostar-ASM: Assembly, Polishing, Annotation & AMR (v1.3.0)"
+    echo "  
     echo "======================================================================="
     echo "Usage: hypol-asm -1 R1.fq.gz -2 R2.fq.gz -n ont.fq.gz -g 2.1m -o out_dir"
     echo ""
@@ -14,11 +16,11 @@ usage() {
     echo "  -n  ONT Long reads (.fastq.gz)"
     echo "  -g  Estimated genome size (e.g., 2.1m or 5.0m)"
     echo "  -o  Output directory"
+    echo "  -m  Important! Medaka model (Default: r1041_e82_400bps_sup_v5.2.0)"
     echo ""
     echo "Options:"
     echo "  -a  Reference GenBank/FASTA for annotation (Prokka --proteins)"
     echo "  -t  CPU threads (Default: 10)"
-    echo "  -m  Medaka model (Default: r1041_e82_400bps_sup_v5.2.0)"
     echo "  -h  Show this help message"
     echo "======================================================================="
     exit 1
@@ -96,8 +98,8 @@ amrfinder -n "$OUTDIR/HyPol_Assembly.fasta" \
           > "$OUTDIR/amr_results/AMR_Report.tsv"
 
 echo "======================================================================="
-echo "  HyPol-ASM PIPELINE COMPLETE"
-echo "  Final Assembly: $OUTDIR/HyPol_Assembly.fasta"
+echo "  MOSTAR-ASM PIPELINE COMPLETE"
+echo "  Final Assembly: $OUTDIR/mostar_Assembly.fasta"
 echo "  AMR Report:     $OUTDIR/amr_results/AMR_Report.tsv"
-echo " If you use this pipeline, please cite:  
+echo "  If you found this pipeline helpful please cite "  
 echo "======================================================================="

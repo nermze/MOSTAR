@@ -65,14 +65,12 @@ hypol-asm -1 R1.fastq.gz -2 R2.fastq.gz -n long_reads.fastq.gz -g 2.1m -a refere
 
 
 # Output Structure
-<pre>
 
-HyPol_Assembly.fasta: Final polished genome.
+The pipeline produces the following output files depending on specified flags:
+1. HyPol_Assembly.fasta: Final polished genome.
+2. amr_results/AMR_Report.tsv: Detected AMR genes and virulence factors.
+3. annotation/: Full functional annotation suite (GFF3, GBK, FAA).
 
-amr_results/AMR_Report.tsv: Detected AMR genes and virulence factors.
-
-annotation/: Full functional annotation suite (GFF3, GBK, FAA).
-</pre>
 
 
 

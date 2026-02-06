@@ -63,7 +63,7 @@ conda activate mostar_env
 conda config --env --set subdir osx-64
 </pre>
 
-Basic Usage:
+# Basic Usage:
 <pre>
 Assembly & polish:
 mostar -1 R1.fastq.gz -2 R2.fastq.gz -n long_reads.fastq.gz -g 2.1m -o results
@@ -92,6 +92,8 @@ mostar -1 R1.fastq.gz -2 R2.fastq.gz -n long_reads.fastq.gz -g 2.1m -a reference
 | `5` | Logs | Run log |
 | `6` | MEDAKA | Consensus sequence |
 | `7` | MOSTAR_Assembly.fasta | Final polished genome. |
+
+# Troubleshooing
 
 # Maintaner and author
 [![GitHub](https://img.shields.io/badge/GitHub-nermze-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/nermze)

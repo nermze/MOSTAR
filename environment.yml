@@ -1,4 +1,4 @@
-name: mostar_env
+name: mostar-env
 channels:
   - conda-forge
   - bioconda
@@ -8,7 +8,8 @@ dependencies:
   - fastp
   - filtlong
   - flye
-  - medaka
+  - blast>=2.9
+  - medaka>=2.2.0
   - bwa
   - polypolish
   - prokka

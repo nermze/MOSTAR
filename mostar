@@ -4,10 +4,10 @@ set -e
 # --- Help Menu ---
 usage() {
     echo "======================================================================="
-    echo "  
-    echo "                            Mostar-ASM 
+    echo ""  
+    echo "                            Mostar-ASM" 
     echo "     Assembly, Polishing, Annotation & AMR of ONT reads (v1.3.0)"
-    echo "  
+    echo ""  
     echo "======================================================================="
     echo "Usage: mostar -1 R1.fq.gz -2 R2.fq.gz -n ont.fq.gz -g 2.1m -o out_dir"
     echo ""

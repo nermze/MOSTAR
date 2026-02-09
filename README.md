@@ -103,13 +103,22 @@ mostar -1 R1.fastq.gz -2 R2.fastq.gz -n long_reads.fastq.gz -g 2.1m -a reference
 | `7` | MOSTAR_Assembly.fasta | Final polished genome. |
 
 # Troubleshooting and known issues
-1. Using the same output folder for multiple runs will result in index errors during assembly. To correct this, please specify a new output folder, or rename the old one. 
-2. Be sure to specify the correct model for your data (example: r1041_e82_400bps_sup_v5.2.0)
-3. If you are using a model which is not accepted, you may need to downgrade medaka or install a specific version. You can do this by typing: conda install -c bioconda medaka=your_version, example medaka=2.2.0 
-4. Setting wrong genome size will lead to poor assembly.
-5. Errors during annotations: Please make sure you are using the "Full Genbank" file if using a reference from NCBI.
+Q: My assembly is poor
+A: You have to specify the correct expected genome size (-g) and model r1041.XX (-m)
 
-# Maintaner and author
+Q: My assembly is still failing
+A: Your input data might be too low quailty. Try more robust trim settings.  
+
+Q: Im getting an index-error during assembly with Flye
+A: You are using the same output folder from a previous run. Please specify a new output folder with (-o), or rename/move/delete the old one. 
+
+Q. My exact model is not accepted 
+A. you may need to downgrade medaka or install a specific version. You can do this by typing: conda install -c bioconda medaka=your_version, example medaka=2.2.0 
+
+Q. I'm experiencing issues with annotations using Apple silicone (M-series)
+A. Skip the annotation step and annotate the final polished fasta manually
+
+# Maintainer and author
 [![GitHub](https://img.shields.io/badge/GitHub-nermze-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/nermze)
 
 Developed and maintained by **Nermin Zecic** ([@nermze](https://github.com/nermze)). 

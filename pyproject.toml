@@ -11,4 +11,4 @@ readme = "README.md"
 license = {text = "MIT"}
 
 [tool.setuptools]
-script-files = ["mostar-asm"]
+script-files = ["mostar"]

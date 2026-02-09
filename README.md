@@ -1,26 +1,34 @@
+# MOSTAR-ASM (Multimodal ONT and Short-read Tool for Assembly and Refinement)
+
 <p align="center">
   <img src="assets/mostar_final.jpg" 
        width="100%" alt="MOSTAR-ASM Banner">
 </p>
 </p>
 
+MOSTAR-ASM is a comprehensive bioinformatics pipeline designed to bridge the gap between long-read structural continuity and short-read base-pair accuracy. By integrating Oxford Nanopore Technologies (ONT) with Illumina sequencing, the pipeline reconstructs highly polished bacterial genomes through an automated de novo assembly, functional annotation as well as AMR profiling. The pipeline is compatible with all Unix-based operating systems, in addition to M-series Apple Silicone (see workarround below).  
 
-
-# MOSTAR-ASM (Multimodal ONT and Short-read Tool for Assembly and Refinement)
-
-MOSTAR-ASM is a comprehensive bioinformatics pipeline designed to bridge the gap between long-read structural continuity and short-read base-pair accuracy. By integrating Oxford Nanopore Technologies (ONT) with Illumina sequencing, the pipeline reconstructs highly polished bacterial genomes through an automated de novo assembly, annotation and AMR profiling. The pipeline is also compatible with Apple Silicone (M-series).  
-
-The pipeline performs the following steps:
+The pipeline performs the following with minimal input from the user:
 1. Dual-Stage QC: Automated adapter trimming (fastp) and length-based long-read filtering (Filtlong).
 2. De Novo Assembly: High-performance assembly using Flye's nano-hq parameters.
-3. Multi-Step Polishing: Long-read consensus correction with Medaka followed by short-read structural polishing via BWA and Polypolish.
-4. Automated Annotation: Full functional annotation with Prokka.
-5. Automated AMR: AMRFinder+ resistance profile (tsv)
-6. Generates standardized GFF3, GBK, and FASTA outputs.
+3. Long-read consensus correction with Medaka
+4. Short-read structural polishing via BWA and Polypolish.
+5. Annotation (optional): Full functional annotation with PROKKA.
+6. NCBI AMRFinder+ resistance profile 
+7. Generates standardized GFF3, GBK, tsv, and FASTA outputs.
 
-# Requirments (Installed by yml)
+# Requirements and input files
+<pre>
+1. ONT-reads 
+2. Illumina paired end reads (R1/R2)
+3. Model (Very important!) (Default: r1041_e82_400bps_sup_v5.2.0) 
+  
+Optional (if running PROKKA)
+1. Genbank reference sequence 
+</pre>
 
-Linux
+# Packages & Dependencies (installed by yml)
+<pre>
 1. Fastp
 2. Flye
 3. Medaka
@@ -31,7 +39,8 @@ Linux
 8. Filtlong
 9. Samtools
 10. Minimap2
-  
+</pre>  
+
 # Installation (Conda or Mamba)
 <pre>
 Clone the repository:
@@ -93,7 +102,12 @@ mostar -1 R1.fastq.gz -2 R2.fastq.gz -n long_reads.fastq.gz -g 2.1m -a reference
 | `6` | MEDAKA | Consensus sequence |
 | `7` | MOSTAR_Assembly.fasta | Final polished genome. |
 
-# Troubleshooing
+# Troubleshooting and known issues
+1. Using the same output folder for multiple runs will result in index errors during assembly. To correct this, please specify a new output folder, or rename the old one. 
+2. Be sure to specify the correct model for your data (example: r1041_e82_400bps_sup_v5.2.0)
+3. If you are using a model which is not accepted, you may need to downgrade medaka or install a specific version. You can do this by typing: conda install -c bioconda medaka=your_version, example medaka=2.2.0 
+4. Setting wrong genome size will lead to poor assembly.
+5. Errors during annotations: Please make sure you are using the "Full Genbank" file if using a reference from NCBI.
 
 # Maintaner and author
 [![GitHub](https://img.shields.io/badge/GitHub-nermze-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/nermze)

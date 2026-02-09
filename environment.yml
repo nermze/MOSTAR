@@ -12,7 +12,7 @@ dependencies:
   - medaka>=2.2.0
   - bwa
   - polypolish
-  - prokka
+  - prokka>=1.14.6
   - perl-xml-simple   
   - perl-time-hires    
   - perl-digest-md5

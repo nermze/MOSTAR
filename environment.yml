@@ -1,4 +1,4 @@
-name: mostar-env
+name: mostar_env
 channels:
   - conda-forge
   - bioconda

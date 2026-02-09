@@ -15,7 +15,9 @@ dependencies:
   - prokka
   - perl-xml-simple   
   - perl-time-hires    
-  - perl-digest-md5    
+  - perl-digest-md5
+  - perl-bio-searchio-hmmer
+  - perl-bioperl
   - ncbi-amrfinderplus
   - samtools
   - minimap2

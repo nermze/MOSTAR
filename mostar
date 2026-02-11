@@ -1,38 +1,60 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
-# --- Help Menu ---
+
+# MOSTAR is a comprehensive bioinformatics pipeline for proceccsing ONT-reads.
+# * Hybrid-assembly
+# * Assembly without short-reads
+# * Polishing
+# * Functional annotaiton
+# * AMR profiling
+# * Built-in Quality controls
+
+# Help Menu
 usage() {
-    echo "======================================================================="
-    echo ""  
-    echo "                            Mostar-ASM" 
-    echo "     Assembly, Polishing, Annotation & AMR of ONT reads (v1.3.0)"
-    echo ""  
-    echo "======================================================================="
-    echo "Usage: mostar -1 R1.fq.gz -2 R2.fq.gz -n ont.fq.gz -g 2.1m -o out_dir"
     echo ""
-    echo "Required Arguments:"
-    echo "  -1  Forward Illumina reads (.fastq.gz)"
-    echo "  -2  Reverse Illumina reads (.fastq.gz)"
+    echo "A comprehensive bioinformatics pipeline by Nermin Zecic, <nermze@gmail.com>"
+    echo ""
+    echo "      __      __   __    ____  _______   __     _____             "
+    echo "      | |\  /| |  /  \  / ___| |_   _|  /  \   | __  \            "
+    echo "      | | \/ | | | || | \___ \   | |   / /\ \  | |_) /            "
+    echo "      |_|\__/|_|  \__/  |____/   |_|  /_/  \_\ |_\ \_\            "
+    echo ""
+    echo ""
+    echo "Assembly, Polishing, Annotation & AMR of ONT reads (v1.5.0)"
+    echo ""
+    echo "Tip: Mostar can perform both hybrid and regular assembly"
+    echo ""
+    echo "Hybrid Assembly: mostar -n ont.fq.gz -g [size] -o [dir] -p [Organism] -1 R1.fq -2 R2.fq"
+    echo "Regular Assembly: mostar -n ont.fq.gz -g [size] -o [dir] -p [Organism]"
+    echo ""
+    echo "Required:"
     echo "  -n  ONT Long reads (.fastq.gz)"
-    echo "  -g  Estimated genome size (e.g., 2.1m or 5.0m)"
+    echo "  -g  Genome size (e.g., 2.1m, 5.0m, 4g)"
     echo "  -o  Output directory"
-    echo "  -m  Important! Medaka model (Default: r1041_e82_400bps_sup_v5.2.0)"
+    echo "  -p  Organism for AMRFinder+ (e.g., Escherichia, Staphylococcus)"
     echo ""
     echo "Options:"
-    echo "  -a  Reference GenBank for annotation (Prokka --proteins)"
-    echo "  -t  CPU threads (Default: 10)"
-    echo "  -h  Show this help message"
-    echo "======================================================================="
+    echo "  -1/-2 Illumina R1/R2 (Enables Hybrid mode)"
+    echo "  -m    Medaka model (Default: r1041_e82_400bps_sup_v5.2.0)"
+    echo "  -f    Filtlong target coverage (Default: 100)"
+    echo "  -c/-i Prokka coverage/identity % (Default: 80/80)"
+    echo "  -a    Proteins/GenBank for annotation"
+    echo "  -t    CPU threads (Default: 10)"
+    echo ""
+    echo MOSTAR v1.5.0
     exit 1
 }
 
-# Defaults parameters
+# Defaults
 THREADS=10
 MEDAKA_MODEL="r1041_e82_400bps_sup_v5.2.0"
-PROT_REF=""
+R1=""; R2=""; PROT_REF=""; ORGANISM=""
+PROKKA_COV=80; PROKKA_ID=80; FILTLONG_COV=100
+PROKKA_SUCCESS=false
 
-while getopts "1:2:n:g:o:a:t:m:h" opt; do
+# Added 'p:' for the organism flag
+while getopts "1:2:n:g:o:a:t:m:c:i:f:p:h" opt; do
     case ${opt} in
         1) R1=$OPTARG ;;
         2) R2=$OPTARG ;;
@@ -42,73 +64,109 @@ while getopts "1:2:n:g:o:a:t:m:h" opt; do
         a) PROT_REF=$OPTARG ;;
         t) THREADS=$OPTARG ;;
         m) MEDAKA_MODEL=$OPTARG ;;
+        p) ORGANISM=$OPTARG ;;
+        f) FILTLONG_COV=$OPTARG ;;
         h) usage ;;
+        *) usage ;;
     esac
 done
 
-if [[ -z "$R1" || -z "$R2" || -z "$ONT" || -z "$GSIZE" || -z "$OUTDIR" ]]; then usage; fi
+if [[ -z "${ONT:-}" || -z "${GSIZE:-}" || -z "${OUTDIR:-}" ]]; then usage; fi
 
-# Create directory structure
+# Init directories using absolute paths
 mkdir -p "$OUTDIR/intermediate" "$OUTDIR/logs" "$OUTDIR/amr_results"
+REAL_OUT=$(cd "$OUTDIR" && pwd)
+FINAL_ASM="$REAL_OUT/mostar_Assembly.fasta"
 
-# Perform short read trimming using FastP
-echo "[$(date +%T)] 1/7: Short-read QC (fastp)..."
-fastp --in1 "$R1" --in2 "$R2" \
-      --out1 "$OUTDIR/intermediate/sh_R1.fq.gz" --out2 "$OUTDIR/intermediate/sh_R2.fq.gz" \
-      --thread "$THREADS" --json "$OUTDIR/logs/fastp.json" --html "$OUTDIR/logs/fastp.html" > /dev/null 2>&1
+# Short-read QC with FASTP
+if [[ -n "$R1" && -n "$R2" ]]; then
+    echo "[$(date +%T)] 1/7: Short-read QC (fastp)..."
+    fastp --in1 "$R1" --in2 "$R2" --out1 "$OUTDIR/intermediate/sh_R1.fq.gz" --out2 "$OUTDIR/intermediate/sh_R2.fq.gz" \
+          --thread "$THREADS" --json "$OUTDIR/logs/fastp.json" --html "$OUTDIR/logs/fastp.html" > /dev/null 2>&1
+fi
 
-# Perform long-read filtering 
+# Long-read filtering with Filtlong
 echo "[$(date +%T)] 2/7: Long-read filtering (filtlong)..."
-filtlong --min_length 1000 --keep_percent 90 "$ONT" | gzip > "$OUTDIR/intermediate/ont_filt.fq.gz"
+G_VAL=$(echo "$GSIZE" | sed 's/[a-zA-Z]//g')
+TARGET_VAL=$(echo "$G_VAL * $FILTLONG_COV" | bc | cut -d. -f1)
+UNIT=$(echo "$GSIZE" | grep -o '[a-zA-Z]' || echo "")
+TARGET_STR="${TARGET_VAL}${UNIT}"
 
-# De-novo assembly using FLYE
-echo "[$(date +%T)] 3/7: De Novo Assembly (Flye) [$GSIZE]..."
+FILTLONG_OPTS="--min_length 1000 --target_bases $TARGET_STR"
+[[ -n "$R1" && -n "$R2" ]] && FILTLONG_OPTS="$FILTLONG_OPTS -1 $OUTDIR/intermediate/sh_R1.fq.gz -2 $OUTDIR/intermediate/sh_R2.fq.gz"
+filtlong $FILTLONG_OPTS "$ONT" | gzip > "$OUTDIR/intermediate/ont_filt.fq.gz"
+
+# De-novo assembly with Flye
+echo "[$(date +%T)] 3/7: De Novo Assembly (Flye)..."
 flye --nano-hq "$OUTDIR/intermediate/ont_filt.fq.gz" --genome-size "$GSIZE" --threads "$THREADS" --out-dir "$OUTDIR/flye"
 
-# Polish long reads and extract consenus sequence using MEDAKA
+# Consenus extraction and error-correcton with Medaka
 echo "[$(date +%T)] 4/7: Long-read polishing (Medaka)..."
 medaka_consensus -i "$OUTDIR/intermediate/ont_filt.fq.gz" -d "$OUTDIR/flye/assembly.fasta" \
                  -m "$MEDAKA_MODEL" -t "$THREADS" -o "$OUTDIR/medaka"
 
-# Align short reads to the extracted consesus sequence 
-echo "[$(date +%T)] 5/7: Hybrid Polishing (BWA + Polypolish)..."
-bwa index "$OUTDIR/medaka/consensus.fasta" > /dev/null 2>&1
-bwa mem -t "$THREADS" "$OUTDIR/medaka/consensus.fasta" "$OUTDIR/intermediate/sh_R1.fq.gz" > "$OUTDIR/intermediate/1.sam"
-bwa mem -t "$THREADS" "$OUTDIR/medaka/consensus.fasta" "$OUTDIR/intermediate/sh_R2.fq.gz" > "$OUTDIR/intermediate/2.sam"
+# Hybrid Polishing using Polypolish
+if [[ -n "$R1" && -n "$R2" ]]; then
+    echo "[$(date +%T)] 5/7: Hybrid Polishing (Polypolish)..."
+    bwa index "$OUTDIR/medaka/consensus.fasta" > /dev/null 2>&1
+    bwa mem -t "$THREADS" "$OUTDIR/medaka/consensus.fasta" "$OUTDIR/intermediate/sh_R1.fq.gz" > "$OUTDIR/intermediate/1.sam"
+    bwa mem -t "$THREADS" "$OUTDIR/medaka/consensus.fasta" "$OUTDIR/intermediate/sh_R2.fq.gz" > "$OUTDIR/intermediate/2.sam"
+    polypolish filter --in1 "$OUTDIR/intermediate/1.sam" --in2 "$OUTDIR/intermediate/2.sam" --out1 "$OUTDIR/intermediate/f1.sam" --out2 "$OUTDIR/intermediate/f2.sam"
+    polypolish polish "$OUTDIR/medaka/consensus.fasta" "$OUTDIR/intermediate/f1.sam" "$OUTDIR/intermediate/f2.sam" > "$FINAL_ASM"
+else
+    cp "$OUTDIR/medaka/consensus.fasta" "$FINAL_ASM"
+fi
 
-# Filter 
-polypolish filter --in1 "$OUTDIR/intermediate/1.sam" --in2 "$OUTDIR/intermediate/2.sam" \
-                  --out1 "$OUTDIR/intermediate/f1.sam" --out2 "$OUTDIR/intermediate/f2.sam"
-# Polish 
-polypolish polish "$OUTDIR/medaka/consensus.fasta" "$OUTDIR/intermediate/f1.sam" "$OUTDIR/intermediate/f2.sam" > "$OUTDIR/mostar_Assembly.fasta"
-
-# Annotate using PROKKA 
+# Functional annotation using Prokka:
 echo "[$(date +%T)] 6/7: Functional Annotation (Prokka)..."
+set +e
+# Standard Linux fix for expired tbl2asn
 echo -e '#!/bin/bash\necho "tbl2asn 25.8"' > "$OUTDIR/intermediate/tbl2asn"
 chmod +x "$OUTDIR/intermediate/tbl2asn"
 
-PROKKA_CMD="PATH=\"$OUTDIR/intermediate:\$PATH\" prokka --outdir \"$OUTDIR/annotation\" --prefix mostar_Annotation --cpus \"$THREADS\" --kingdom Bacteria"
-if [[ -n "$PROT_REF" ]]; then PROKKA_CMD="$PROKKA_CMD --proteins \"$PROT_REF\""; fi
-eval "$PROKKA_CMD \"$OUTDIR/mostar_Assembly.fasta\""
+PROKKA_CMD="PATH=\"$OUTDIR/intermediate:\$PATH\" prokka --outdir \"$OUTDIR/annotation\" --prefix mostar_Annotation --cpus \"$THREADS\" --kingdom Bacteria --force"
+[[ -n "$PROT_REF" ]] && PROKKA_CMD="$PROKKA_CMD --proteins \"$PROT_REF\""
 
-# Run NCBI AMRFinderPlus
-echo "[$(date +%T)] 7/7: AMR Gene Detection (AMRFinderPlus)..."
-# Check if AMR database is installed, if not, try to update
-if ! amrfinder --database_version > /dev/null 2>&1; then
-    echo "Notice: AMR database not found. Attempting to download..."
-    amrfinder -u
+if eval "$PROKKA_CMD \"$FINAL_ASM\""; then PROKKA_SUCCESS=true; else PROKKA_SUCCESS=false; fi
+set -e
+
+# AMR Resistance profile using NCBI AMRFinderPlus (With Organism Mutation Search)
+echo "[$(date +%T)] 7/7: AMR Gene Detection..."
+if ! amrfinder --database_version > /dev/null 2>&1; then amrfinder -u; fi
+
+AMR_BASE="amrfinder --threads $THREADS --plus"
+[[ -n "$ORGANISM" ]] && AMR_BASE="$AMR_BASE -O $ORGANISM"
+
+if [ "$PROKKA_SUCCESS" = true ]; then
+    eval "$AMR_BASE -n \"$FINAL_ASM\" -p \"$OUTDIR/annotation/mostar_Annotation.faa\" -g \"$OUTDIR/annotation/mostar_Annotation.gff\" > \"$OUTDIR/amr_results/AMR_Report.tsv\""
+else
+    eval "$AMR_BASE -n \"$FINAL_ASM\" > \"$OUTDIR/amr_results/AMR_Report.tsv\""
 fi
 
-amrfinder -n "$OUTDIR/mostar_Assembly.fasta" \
-          -p "$OUTDIR/annotation/mostar_Annotation.faa" \
-          -g "$OUTDIR/annotation/mostar_Annotation.gff" \
-          --threads "$THREADS" \
-          --plus --protein_end_minus 10 \
-          > "$OUTDIR/amr_results/AMR_Report.tsv"
+# Cleanup 
+echo "Cleaning up and deleting temporary files..."
+if [ "$CLEANUP" = true ]; then
+    echo "[$(date +%T)] 8/8: Cleaning up intermediate SAM and FASTQ files..."
+    rm -f "$OUTDIR/intermediate/"*.sam "$OUTDIR/intermediate/ont_filt.fq.gz"
+fi
 
-echo "======================================================================="
+# Metrics Calculation
+echo "[$(date +%T)] Calculating Assembly Metrics..."
+METRICS=$(awk '/^>/ {if (seqlen){print seqlen}; seqlen=0; next} {seqlen += length($0)} END {print seqlen}' "$FINAL_ASM" | sort -rn | \
+awk '{a[i++]=$1; sum+=$1} END {if (sum==0) {print "0 0 0 0"; exit}; for(j=0;j<i;j++){total+=a[j]; if(total>=sum/2){print sum,i,a[j],j+1; break}}}')
+
+# Map variables with a default fallback to prevent 'unbound variable' errors
+read -r TOTAL_LEN CONTIG_CNT N50_VAL L50_VAL <<< "${METRICS:-0 0 0 0}"
+
+# FINAL SUMMAR
+echo ""
 echo "  MOSTAR-ASM PIPELINE COMPLETE"
-echo "  Final Assembly: $OUTDIR/mostar_Assembly.fasta"
-echo "  AMR Report:     $OUTDIR/amr_results/AMR_Report.tsv"
-echo "  If you found this pipeline helpful please cite "  
-echo "======================================================================="
+echo ""
+echo "  Final Assembly:  $FINAL_ASM"
+echo "  Total Length:    $TOTAL_LEN bp"
+echo "  Contig Count:    $CONTIG_CNT"
+echo "  N50:             $N50_VAL bp"
+echo "  L50:             $L50_VAL"
+echo "  AMR Report:      $OUTDIR/amr_results/AMR_Report.tsv"
+echo "  Annotations: mostar_Annotation"
+echo "  Thank you for running MOSTAR-ASM! If you found this tool helpful, please cite"

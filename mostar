@@ -138,17 +138,17 @@ generate_html_report() {
                 <p style="font-size: 0.75rem; color: #95a5a6; margin-top: 20px;">Automated annotation performed via Prokka v1.14.6</p>
             </section>
 
-            <section class="card" style="grid-column: span 1;">
-                <h2>Antimicrobial Resistance</h2>
-                <table>
-                    <tr><th>Gene</th><th>Class</th><th>Identity</th></tr>
-                    $(if [[ -f "$OUTDIR/amr_results/AMR_Report.tsv" ]]; then
-                        awk -F'\t' 'NR>1 {print "<tr><td><span class=\"amr-tag\">" \$6 "</span></td><td><small>" \$7 "</small></td><td><div class=\"val\">" \$16 "%</div><div class=\"identity-bar\"><div class=\"identity-fill\" style=\"width:" \$16 "%\"></div></div></td></tr>"}' "$OUTDIR/amr_results/AMR_Report.tsv" | head -n 5
-                      else
-                        echo "<tr><td colspan='3'>No resistance genes identified.</td></tr>"
-                      fi)
-                </table>
-            </section>
+            <div class="card">
+            <h2>Antimicrobial Resistance (Top 5)</h2>
+            <table>
+                <tr><th>Gene</th><th>Class</th><th>Identity</th></tr>
+                $(if [[ -f "$OUTDIR/amr_results/AMR_Report.tsv" ]]; then
+                    # \$6=Gene, \$11=Class (e.g. BETA-LACTAM), \$17=Identity
+                    awk -F'\t' 'NR>1 {print "<tr><td><span class=\"amr-tag\">" \$6 "</span></td><td><small>" \$11 "</small></td><td><div class=\"val\">" \$17 "%</div><div class=\"identity-bar\"><div class=\"identity-fill\" style=\"width:" \$17 "%\"></div></div></td></tr>"}' "$OUTDIR/amr_results/AMR_Report.tsv" | head -n 5
+                  else
+                    echo "<tr><td colspan='3'>No resistance genes identified.</td></tr>"
+                  fi)
+            </table>
         </div>
 
         <footer class="footer">
@@ -224,27 +224,18 @@ if [[ -n "${EMU_DB:-}" ]]; then
     EMU_FASTA="$EMU_DB/species_taxid.fasta"
     EMU_TAX="$EMU_DB/taxonomy.tsv"
 
-    # 1. Database Download Logic
     if [[ ! -f "$EMU_FASTA" || ! -f "$EMU_TAX" ]]; then
         echo "[$(date +%T)] Emu database not found. Initiating auto-download..."
         mkdir -p "$EMU_DB"
         (
             cd "$EMU_DB"
             URL="https://osf.io/download/pg7sk/"
-            echo "[$(date +%T)] Downloading Emu default database (~90MB)..."
-            if command -v curl >/dev/null 2>&1; then
-                curl -L "$URL" -o emu_prebuilt.tar
-            else
-                wget -O emu_prebuilt.tar "$URL"
-            fi
-            echo "[$(date +%T)] Extracting..."
+            curl -L "$URL" -o emu_prebuilt.tar
             tar -xvf emu_prebuilt.tar
             rm emu_prebuilt.tar
-            echo "[$(date +%T)] Emu database setup complete."
         )
     fi
 
-    # Run EMU
     if [[ -f "$EMU_FASTA" && -f "$EMU_TAX" ]]; then
         echo "[$(date +%T)] Running Species ID (Emu)..."
         mkdir -p "$OUTDIR/taxonomy"
@@ -253,30 +244,27 @@ if [[ -n "${EMU_DB:-}" ]]; then
                       --threads "$THREADS" \
                       --output-dir "$OUTDIR/taxonomy"
 
-        # Create report
-        EMU_REPORT="$OUTDIR/taxonomy/abundance.tsv"
-        if [[ -f "$EMU_REPORT" ]]; then
-            RAW_ID=$(awk -F'\t' 'NR==2 {print $1}' "$EMU_REPORT")
-            RAW_CONF=$(awk -F'\t' 'NR==2 {print $2}' "$EMU_REPORT")
-            
-            # Safe calculation for confidence
-            if [[ -n "$RAW_CONF" ]]; then
-                TOP_CONF=$(echo "$RAW_CONF * 100" | bc -l | xargs printf "%.2f")
-            else
-                TOP_CONF="0"
-            fi
+        # Find the report (Emu names it based on the input file)
+        EMU_REPORT=$(ls "$OUTDIR/taxonomy/"*rel-abundance.tsv 2>/dev/null | head -n 1)
 
-            # ID to Name mapping
-            if [[ "$RAW_ID" =~ ^[0-9]+$ ]]; then
-                case "$RAW_ID" in
-                    727)  TOP_SPECIES="Haemophilus influenzae (TaxID: 727)" ;;
-                    562)  TOP_SPECIES="Escherichia coli (TaxID: 562)" ;;
-                    1280) TOP_SPECIES="Staphylococcus aureus (TaxID: 1280)" ;;
-                    *)    TOP_SPECIES="NCBI TaxID: $RAW_ID" ;;
-                esac
-            else
-                TOP_SPECIES=$(echo "$RAW_ID" | awk -F';' '{print $NF}')
-            fi
+        if [[ -f "$EMU_REPORT" ]]; then
+            # Use awk for math to avoid printf conversion errors
+            RAW_ID=$(awk -F'\t' 'NR==2 {print $1}' "$EMU_REPORT")
+            TOP_CONF=$(awk -F'\t' 'NR==2 {printf "%.2f", $2*100}' "$EMU_REPORT")
+
+            case "$RAW_ID" in
+                727)  TOP_SPECIES="Haemophilus influenzae (TaxID: 727)" ;;
+                562)  TOP_SPECIES="Escherichia coli (TaxID: 562)" ;;
+                1280) TOP_SPECIES="Staphylococcus aureus (TaxID: 1280)" ;;
+                *)
+                    # If it's a number, label it; otherwise, take the name
+                    if [[ "$RAW_ID" =~ ^[0-9]+$ ]]; then
+                        TOP_SPECIES="NCBI TaxID: $RAW_ID"
+                    else
+                        TOP_SPECIES=$(echo "$RAW_ID" | awk -F';' '{print $NF}')
+                    fi
+                    ;;
+            esac
         else
             TOP_SPECIES="No hits found"; TOP_CONF="0"
         fi

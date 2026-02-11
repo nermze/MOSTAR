@@ -1,10 +1,10 @@
-# MOSTAR-ASM (Multimodal ONT and Short-read Tool for Assembly and Refinement)
-
 <p align="center">
   <img src="assets/mostar_final.jpg" 
        width="100%" alt="MOSTAR-ASM Banner">
 </p>
 </p>
+
+# MOSTAR-ASM (Multimodal ONT and Short-read Tool for Assembly and Refinement)
 
 MOSTAR-ASM is a comprehensive bioinformatics pipeline designed to bridge the gap between long-read structural continuity and short-read base-pair accuracy. By integrating Oxford Nanopore Technologies (ONT) with Illumina sequencing, the pipeline reconstructs highly polished bacterial genomes through an automated de novo assembly, functional annotation as well as AMR profiling. The pipeline is compatible with all Unix-based operating systems, in addition to M-series Apple Silicone (see workarround below).  
 

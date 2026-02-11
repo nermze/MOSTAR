@@ -109,6 +109,12 @@ echo "[$(date +%T)] 4/7: Long-read polishing (Medaka)..."
 medaka_consensus -i "$OUTDIR/intermediate/ont_filt.fq.gz" -d "$OUTDIR/flye/assembly.fasta" \
                  -m "$MEDAKA_MODEL" -t "$THREADS" -o "$OUTDIR/medaka"
 
+# Capture Medaka metrics for comparison 
+MEDAKA_ASM="$OUTDIR/medaka/consensus.fasta"
+M_STATS=$(awk '/^>/ {if (seqlen){print seqlen}; seqlen=0; next} {seqlen += length($0)} END {print seqlen}' "$MEDAKA_ASM" | sort -rn | \
+awk '{a[i++]=$1; s+=$1} END {if(s==0){print "0 0 0 0"} else {for(j=0;j<i;j++){t+=a[j]; if(t>=s/2){print s,i,a[j],j+1; break}}}}')
+read -r M_LEN M_CNT M_N50 M_L50 <<< "${M_STATS:-0 0 0 0}"
+
 # Hybrid Polishing using Polypolish
 if [[ -n "$R1" && -n "$R2" ]]; then
     echo "[$(date +%T)] 5/7: Hybrid Polishing (Polypolish)..."
@@ -162,15 +168,27 @@ awk '{a[i++]=$1; sum+=$1} END {if (sum==0) {print "0 0 0 0"; exit}; for(j=0;j<i;
 # Map variables with a default fallback to prevent 'unbound variable' errors
 read -r TOTAL_LEN CONTIG_CNT N50_VAL L50_VAL <<< "${METRICS:-0 0 0 0}"
 
-# FINAL SUMMAR
+# FINAL SUMMARY
 echo ""
 echo "  MOSTAR-ASM PIPELINE COMPLETE"
+echo -e "METRIC\t\tMEDAKA (ONT)\t\tFINAL (HYBRID/POLISHED)"
 echo ""
+echo -e "Total Length\t${M_LEN} bp\t\t${TOTAL_LEN} bp"
+echo -e "Contig Count\t${M_CNT}\t\t\t${CONTIG_CNT}"
+echo -e "N50\t\t${M_N50} bp\t\t${N50_VAL} bp"
+echo ""
+# Calculate the difference if Illumina was used
+if [[ -n "$R1" ]]; then
+    LEN_DIFF=$(( TOTAL_LEN - M_LEN ))
+    echo "Hybrid Polishing Effect: $LEN_DIFF bp change in total length."
+    echo "Polypolish was applied using provided Illumina reads."
+else
+    echo "Mode: Long-read only (No Illumina provided)."
+fi
+echo ""
+echo "  Output files:
 echo "  Final Assembly:  $FINAL_ASM"
-echo "  Total Length:    $TOTAL_LEN bp"
-echo "  Contig Count:    $CONTIG_CNT"
-echo "  N50:             $N50_VAL bp"
-echo "  L50:             $L50_VAL"
 echo "  AMR Report:      $OUTDIR/amr_results/AMR_Report.tsv"
-echo "  Annotations: mostar_Annotation"
+echo "  Annotations:     $OUTDIR/annotation/mostar_Annotation"
+echo ""
 echo "  Thank you for running MOSTAR-ASM! If you found this tool helpful, please cite"

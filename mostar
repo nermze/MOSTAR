@@ -109,30 +109,57 @@ filtlong $FILTLONG_OPTS "$ONT" | gzip > "$OUTDIR/intermediate/ont_filt.fq.gz"
 
 # Taxonomic classification with EMU [Optional]
 if [[ -n "$EMU_DB" ]]; then
-    echo "[$(date +%T)] 2.5/7: Checking Emu Database..."
+    # Define the expected database file
+    EMU_INDEX="$EMU_DB/emu.dmnd"
 
-    # Check if the database folder exists
-    if [[ ! -d "$EMU_DB" || ! -f "$EMU_DB/emu.dmnd" ]]; then
-        echo "[!] Emu database not found at $EMU_DB. Attempting download..."
+    if [[ ! -f "$EMU_INDEX" ]]; then
+        echo "[$(date +%T)] Emu database not found. Initiating auto-download..."
+        echo "[!] WARNING: This requires ~32GB of download and ~55GB of disk space."
         
-        # Check for osfclient
-        if ! command -v osf &> /dev/null; then
-            echo "[!] osfclient not found. Attempting to install via pip..."
-            pip install osfclient --user > /dev/null 2>&1 || { echo "Error: Failed to install osfclient. Please install it manually."; exit 1; }
-            export PATH="$HOME/.local/bin:$PATH"
-        fi
-
-        # Download the EMU database
+        # Create directory if it doesn't exist
         mkdir -p "$EMU_DB"
+
+        # Use a subshell to download and extract
         (
             cd "$EMU_DB"
-            echo "[$(date +%T)] Downloading Emu prebuilt DB (this may take a while)..."
-            osf -p 56uf7 fetch osfstorage/emu-prebuilt/emu.tar
-            echo "[$(date +%T)] Extracting database..."
-            tar -xvf emu.tar
-            rm emu.tar  # Clean up the tarball to save space
+            # Direct link to the OSF prebuilt database (Project ID: 56uf7)
+            # -L follows redirects, -o saves as file name
+            if command -v curl >/dev/null 2>&1; then
+                curl -L https://osf.io/download/56uf7/ -o emu_prebuilt.tar
+            elif command -v wget >/dev/null 2>&1; then
+                wget https://osf.io/download/56uf7/ -O emu_prebuilt.tar
+            else
+                echo "[!] Error: Neither curl nor wget found. Cannot download database."
+                exit 1
+            fi
+
+            echo "[$(date +%T)] Extraction started. This may take several minutes..."
+            tar -xvf emu_prebuilt.tar
+            rm emu_prebuilt.tar
+            echo "[$(date +%T)] Emu database setup complete."
         )
     fi
+
+    # Verification step
+    if [[ -f "$EMU_INDEX" ]]; then
+        echo "[$(date +%T)] 2.5/7: Clinical Species ID (Emu)..."
+        mkdir -p "$OUTDIR/taxonomy"
+        emu abundance "$OUTDIR/intermediate/ont_filt.fq.gz" \
+                      --db "$EMU_DB" \
+                      --threads "$THREADS" \
+                      --output-dir "$OUTDIR/taxonomy"
+
+        # Correct parsing of the Emu TSV output
+        EMU_REPORT="$OUTDIR/taxonomy/abundance.tsv"
+        if [[ -f "$EMU_REPORT" ]]; then
+            TOP_SPECIES=$(awk -F'\t' 'NR==2 {print $1}' "$EMU_REPORT")
+            TOP_CONF=$(awk -F'\t' 'NR==2 {printf "%.2f", $2*100}' "$EMU_REPORT")
+        fi
+    else
+        echo "[!] Error: Emu database index (.dmnd) missing. Skipping taxonomy."
+        TOP_SPECIES="Download Failed"; TOP_CONF="0"
+    fi
+fi
 
     # Run Emu Abundance
     echo "[$(date +%T)] Running Clinical Species ID (Emu)..."

@@ -12,6 +12,7 @@ dependencies:
   - samtools>=1.19
   - bcftools>=1.19
   - fastp
+  - emu
   - filtlong
   - flye
   - bwa

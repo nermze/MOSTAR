@@ -1,24 +1,26 @@
-name: mostar-env
+name: mostar_env
 channels:
   - conda-forge
   - bioconda
   - defaults
 dependencies:
   - python=3.10
+  - mamba               
+  - medaka=2.2.0
+  - prokka=1.14.6
+  - blast>=2.15.0
+  - samtools>=1.19
+  - bcftools>=1.19
   - fastp
   - filtlong
   - flye
-  - blast>=2.9
-  - medaka>=2.2.0
   - bwa
   - polypolish
-  - prokka>=1.14.6
-  - perl-xml-simple   
-  - perl-time-hires    
-  - perl-digest-md5
-  - perl-bio-searchio-hmmer
-  - perl-bioperl
-  - ncbi-amrfinderplus
-  - samtools
   - minimap2
-  - pip
+  - ncbi-amrfinderplus
+  - perl-xml-simple
+  - perl-time-hires
+  - perl-digest-md5
+  - perl-bioperl
+  - perl-bio-searchio-hmmer
+  - bc

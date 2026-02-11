@@ -38,7 +38,8 @@ usage() {
     echo "  -1/-2 Illumina R1/R2 (Enables Hybrid mode)"
     echo "  -m    Medaka model (Default: r1041_e82_400bps_sup_v5.2.0)"
     echo "  -f    Filtlong target coverage (Default: 100)"
-    echo "  -c/-i Prokka coverage/identity % (Default: 80/80)"
+    echo "  -c    Prokka minimum coverage % (Default: 80)"
+    echo "  -i    Prokka e-value (Default: 1e-09)"
     echo "  -a    Proteins/GenBank for annotation"
     echo "  -t    CPU threads (Default: 10)"
     echo ""
@@ -50,11 +51,11 @@ usage() {
 THREADS=10
 MEDAKA_MODEL="r1041_e82_400bps_sup_v5.2.0"
 R1=""; R2=""; PROT_REF=""; ORGANISM=""
-PROKKA_COV=80; PROKKA_ID=80; FILTLONG_COV=100
+PROKKA_COV=80; PROKKA_EVAL="1e-09"; FILTLONG_COV=100
 PROKKA_SUCCESS=false
 
-# Added 'p:' for the organism flag
-while getopts "1:2:n:g:o:a:t:m:c:i:f:p:h" opt; do
+# Options and arguments 
+while getopts "1:2:n:g:o:a:t:m:c:i:f:p:xh" opt; do
     case ${opt} in
         1) R1=$OPTARG ;;
         2) R2=$OPTARG ;;
@@ -63,9 +64,12 @@ while getopts "1:2:n:g:o:a:t:m:c:i:f:p:h" opt; do
         o) OUTDIR=$OPTARG ;;
         a) PROT_REF=$OPTARG ;;
         t) THREADS=$OPTARG ;;
+        c) PROKKA_COV=$OPTARG ;;
+        i) PROKKA_EVAL=$OPTARG ;;
         m) MEDAKA_MODEL=$OPTARG ;;
         p) ORGANISM=$OPTARG ;;
         f) FILTLONG_COV=$OPTARG ;;
+        x) CLEANUP=true ;;
         h) usage ;;
         *) usage ;;
     esac
@@ -124,7 +128,7 @@ set +e
 echo -e '#!/bin/bash\necho "tbl2asn 25.8"' > "$OUTDIR/intermediate/tbl2asn"
 chmod +x "$OUTDIR/intermediate/tbl2asn"
 
-PROKKA_CMD="PATH=\"$OUTDIR/intermediate:\$PATH\" prokka --outdir \"$OUTDIR/annotation\" --prefix mostar_Annotation --cpus \"$THREADS\" --kingdom Bacteria --force"
+PROKKA_CMD="PATH=\"$OUTDIR/intermediate:\$PATH\" prokka --outdir \"$OUTDIR/annotation\" --coverage $PROKKA_COV --evalue $PROKKA_EVAL --prefix MOSTAR_Annotation --cpus \"$THREADS\" --kingdom Bacteria --force"
 [[ -n "$PROT_REF" ]] && PROKKA_CMD="$PROKKA_CMD --proteins \"$PROT_REF\""
 
 if eval "$PROKKA_CMD \"$FINAL_ASM\""; then PROKKA_SUCCESS=true; else PROKKA_SUCCESS=false; fi

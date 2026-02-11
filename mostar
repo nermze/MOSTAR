@@ -21,7 +21,7 @@ usage() {
     echo "      |_|\__/|_|  \__/  |____/   |_|  /_/  \_\ |_\ \_\            "
     echo ""
     echo ""
-    echo "Assembly, Polishing, Annotation & AMR of ONT reads (v1.5.0)"
+    echo "Assembly, Polishing, Annotation & AMR of ONT reads (v1.0.0)"
     echo ""
     echo "Tip: Mostar can perform both hybrid and regular assembly"
     echo ""
@@ -43,7 +43,7 @@ usage() {
     echo "  -a    Proteins/GenBank for annotation"
     echo "  -t    CPU threads (Default: 10)"
     echo ""
-    echo MOSTAR v1.5.0
+    echo MOSTAR v1.0.0
     exit 1
 }
 
@@ -53,6 +53,7 @@ MEDAKA_MODEL="r1041_e82_400bps_sup_v5.2.0"
 R1=""; R2=""; PROT_REF=""; ORGANISM=""
 PROKKA_COV=80; PROKKA_EVAL="1e-09"; FILTLONG_COV=100
 PROKKA_SUCCESS=false
+CLEANUP=false
 
 # Options and arguments 
 while getopts "1:2:n:g:o:a:t:m:c:i:f:p:xh" opt; do
@@ -110,9 +111,15 @@ medaka_consensus -i "$OUTDIR/intermediate/ont_filt.fq.gz" -d "$OUTDIR/flye/assem
                  -m "$MEDAKA_MODEL" -t "$THREADS" -o "$OUTDIR/medaka"
 
 # Capture Medaka metrics for comparison 
-MEDAKA_ASM="$OUTDIR/medaka/consensus.fasta"
-M_STATS=$(awk '/^>/ {if (seqlen){print seqlen}; seqlen=0; next} {seqlen += length($0)} END {print seqlen}' "$MEDAKA_ASM" | sort -rn | \
-awk '{a[i++]=$1; s+=$1} END {if(s==0){print "0 0 0 0"} else {for(j=0;j<i;j++){t+=a[j]; if(t>=s/2){print s,i,a[j],j+1; break}}}}')
+M_STATS_FILE="$OUTDIR/medaka/consensus.fasta"
+
+if [[ -f "$M_STATS_FILE" ]]; then
+    M_STATS=$(awk '/^>/ {if (seqlen){print seqlen}; seqlen=0; next} {seqlen += length($0)} END {print seqlen}' "$M_STATS_FILE" | sort -rn | \
+    awk '{a[i++]=$1; s+=$1} END {if(s==0){print "0 0 0 0"} else {for(j=0;j<i;j++){t+=a[j]; if(t>=s/2){print s,i,a[j],j+1; break}}}}')
+else
+    M_STATS="0 0 0 0"
+fi
+
 read -r M_LEN M_CNT M_N50 M_L50 <<< "${M_STATS:-0 0 0 0}"
 
 # Hybrid Polishing using Polypolish
@@ -127,7 +134,7 @@ else
     cp "$OUTDIR/medaka/consensus.fasta" "$FINAL_ASM"
 fi
 
-# Functional annotation using Prokka:
+# Functional annotation using Prokka
 echo "[$(date +%T)] 6/7: Functional Annotation (Prokka)..."
 set +e
 # Standard Linux fix for expired tbl2asn
@@ -154,18 +161,17 @@ else
 fi
 
 # Cleanup 
-echo "Cleaning up and deleting temporary files..."
-if [ "$CLEANUP" = true ]; then
-    echo "[$(date +%T)] 8/8: Cleaning up intermediate SAM and FASTQ files..."
+if [ "${CLEANUP:-false}" = true ]; then
+    echo "[$(date +%T)] Cleaning up intermediate SAM and FASTQ files..."
     rm -f "$OUTDIR/intermediate/"*.sam "$OUTDIR/intermediate/ont_filt.fq.gz"
 fi
 
-# Metrics Calculation
+# Calculate Assembly metrics 
 echo "[$(date +%T)] Calculating Assembly Metrics..."
 METRICS=$(awk '/^>/ {if (seqlen){print seqlen}; seqlen=0; next} {seqlen += length($0)} END {print seqlen}' "$FINAL_ASM" | sort -rn | \
 awk '{a[i++]=$1; sum+=$1} END {if (sum==0) {print "0 0 0 0"; exit}; for(j=0;j<i;j++){total+=a[j]; if(total>=sum/2){print sum,i,a[j],j+1; break}}}')
 
-# Map variables with a default fallback to prevent 'unbound variable' errors
+# Map variables with fallback
 read -r TOTAL_LEN CONTIG_CNT N50_VAL L50_VAL <<< "${METRICS:-0 0 0 0}"
 
 # FINAL SUMMARY
@@ -173,12 +179,13 @@ echo ""
 echo "  MOSTAR-ASM PIPELINE COMPLETE"
 echo -e "METRIC\t\tMEDAKA (ONT)\t\tFINAL (HYBRID/POLISHED)"
 echo ""
-echo -e "Total Length\t${M_LEN} bp\t\t${TOTAL_LEN} bp"
-echo -e "Contig Count\t${M_CNT}\t\t\t${CONTIG_CNT}"
-echo -e "N50\t\t${M_N50} bp\t\t${N50_VAL} bp"
+echo -e "Total Length\t${M_LEN:-0} bp\t\t${TOTAL_LEN} bp"
+echo -e "Contig Count\t${M_CNT:-0}\t\t\t${CONTIG_CNT}"
+echo -e "N50\t\t${M_N50:-0} bp\t\t${N50_VAL} bp"
+echo ""
 echo ""
 # Calculate the difference if Illumina was used
-if [[ -n "$R1" ]]; then
+if [[ -n "${R1:-}" ]]; then
     LEN_DIFF=$(( TOTAL_LEN - M_LEN ))
     echo "Hybrid Polishing Effect: $LEN_DIFF bp change in total length."
     echo "Polypolish was applied using provided Illumina reads."
@@ -186,7 +193,7 @@ else
     echo "Mode: Long-read only (No Illumina provided)."
 fi
 echo ""
-echo "  Output files:
+echo "  OUTPUT FILES"
 echo "  Final Assembly:  $FINAL_ASM"
 echo "  AMR Report:      $OUTDIR/amr_results/AMR_Report.tsv"
 echo "  Annotations:     $OUTDIR/annotation/mostar_Annotation"

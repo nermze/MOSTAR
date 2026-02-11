@@ -8,6 +8,7 @@ set -euo pipefail
 # * Polishing
 # * Functional annotaiton
 # * AMR profiling
+# * Taxonomic profiling
 # * Built-in Quality controls
 
 # Help Menu
@@ -36,11 +37,13 @@ usage() {
     echo ""
     echo "Options:"
     echo "  -1/-2 Illumina R1/R2 (Enables Hybrid mode)"
+    echo "  -k    Path to the EMU Database 
     echo "  -m    Medaka model (Default: r1041_e82_400bps_sup_v5.2.0)"
     echo "  -f    Filtlong target coverage (Default: 100)"
     echo "  -c    Prokka minimum coverage % (Default: 80)"
     echo "  -i    Prokka e-value (Default: 1e-09)"
     echo "  -a    Proteins/GenBank for annotation"
+    echo "  -x    Cleanup intermediate files"
     echo "  -t    CPU threads (Default: 10)"
     echo ""
     echo MOSTAR v1.0.0
@@ -54,9 +57,11 @@ R1=""; R2=""; PROT_REF=""; ORGANISM=""
 PROKKA_COV=80; PROKKA_EVAL="1e-09"; FILTLONG_COV=100
 PROKKA_SUCCESS=false
 CLEANUP=false
+EMU_DB=""
+TOP_SPECIES="Not Run"; TOP_CONF="0"
 
 # Options and arguments 
-while getopts "1:2:n:g:o:a:t:m:c:i:f:p:xh" opt; do
+while getopts "1:2:n:g:o:a:t:m:c:i:f:p:k:xh" opt; do
     case ${opt} in
         1) R1=$OPTARG ;;
         2) R2=$OPTARG ;;
@@ -69,6 +74,7 @@ while getopts "1:2:n:g:o:a:t:m:c:i:f:p:xh" opt; do
         i) PROKKA_EVAL=$OPTARG ;;
         m) MEDAKA_MODEL=$OPTARG ;;
         p) ORGANISM=$OPTARG ;;
+        k) EMU_DB=$OPTARG ;;
         f) FILTLONG_COV=$OPTARG ;;
         x) CLEANUP=true ;;
         h) usage ;;
@@ -78,12 +84,12 @@ done
 
 if [[ -z "${ONT:-}" || -z "${GSIZE:-}" || -z "${OUTDIR:-}" ]]; then usage; fi
 
-# Init directories using absolute paths
+# Init directories
 mkdir -p "$OUTDIR/intermediate" "$OUTDIR/logs" "$OUTDIR/amr_results"
 REAL_OUT=$(cd "$OUTDIR" && pwd)
 FINAL_ASM="$REAL_OUT/mostar_Assembly.fasta"
 
-# Short-read QC with FASTP
+# Short-read QC with FastP [Optional]
 if [[ -n "$R1" && -n "$R2" ]]; then
     echo "[$(date +%T)] 1/7: Short-read QC (fastp)..."
     fastp --in1 "$R1" --in2 "$R2" --out1 "$OUTDIR/intermediate/sh_R1.fq.gz" --out2 "$OUTDIR/intermediate/sh_R2.fq.gz" \
@@ -101,28 +107,70 @@ FILTLONG_OPTS="--min_length 1000 --target_bases $TARGET_STR"
 [[ -n "$R1" && -n "$R2" ]] && FILTLONG_OPTS="$FILTLONG_OPTS -1 $OUTDIR/intermediate/sh_R1.fq.gz -2 $OUTDIR/intermediate/sh_R2.fq.gz"
 filtlong $FILTLONG_OPTS "$ONT" | gzip > "$OUTDIR/intermediate/ont_filt.fq.gz"
 
-# De-novo assembly with Flye
+# Taxonomic classification with EMU [Optional]
+if [[ -n "$EMU_DB" ]]; then
+    echo "[$(date +%T)] 2.5/7: Checking Emu Database..."
+
+    # Check if the database folder exists
+    if [[ ! -d "$EMU_DB" || ! -f "$EMU_DB/emu.dmnd" ]]; then
+        echo "[!] Emu database not found at $EMU_DB. Attempting download..."
+        
+        # Check for osfclient
+        if ! command -v osf &> /dev/null; then
+            echo "[!] osfclient not found. Attempting to install via pip..."
+            pip install osfclient --user > /dev/null 2>&1 || { echo "Error: Failed to install osfclient. Please install it manually."; exit 1; }
+            export PATH="$HOME/.local/bin:$PATH"
+        fi
+
+        # Download the EMU database
+        mkdir -p "$EMU_DB"
+        (
+            cd "$EMU_DB"
+            echo "[$(date +%T)] Downloading Emu prebuilt DB (this may take a while)..."
+            osf -p 56uf7 fetch osfstorage/emu-prebuilt/emu.tar
+            echo "[$(date +%T)] Extracting database..."
+            tar -xvf emu.tar
+            rm emu.tar  # Clean up the tarball to save space
+        )
+    fi
+
+    # Run Emu Abundance
+    echo "[$(date +%T)] Running Clinical Species ID (Emu)..."
+    mkdir -p "$OUTDIR/taxonomy"
+    emu abundance "$OUTDIR/intermediate/ont_filt.fq.gz" \
+                  --db "$EMU_DB" \
+                  --threads "$THREADS" \
+                  --output-dir "$OUTDIR/taxonomy"
+
+    EMU_REPORT="$OUTDIR/taxonomy/abundance.tsv"
+    if [[ -f "$EMU_REPORT" ]]; then
+        TOP_SPECIES=$(awk -F'\t' 'NR==2 {print $1}' "$EMU_REPORT")
+        TOP_CONF=$(awk -F'\t' 'NR==2 {printf "%.2f", $2*100}' "$EMU_REPORT")
+    fi
+else
+    echo "[$(date +%T)] 2.5/7: Skipping Taxonomy (No path provided via -k)."
+fi
+
+# De Novo Assembly with Flye
 echo "[$(date +%T)] 3/7: De Novo Assembly (Flye)..."
 flye --nano-hq "$OUTDIR/intermediate/ont_filt.fq.gz" --genome-size "$GSIZE" --threads "$THREADS" --out-dir "$OUTDIR/flye"
 
-# Consenus extraction and error-correcton with Medaka
+# Polishing and error-correction with Medaka
 echo "[$(date +%T)] 4/7: Long-read polishing (Medaka)..."
 medaka_consensus -i "$OUTDIR/intermediate/ont_filt.fq.gz" -d "$OUTDIR/flye/assembly.fasta" \
                  -m "$MEDAKA_MODEL" -t "$THREADS" -o "$OUTDIR/medaka"
 
-# Capture Medaka metrics for comparison 
+# Statistics for Medaka
 M_STATS_FILE="$OUTDIR/medaka/consensus.fasta"
-
 if [[ -f "$M_STATS_FILE" ]]; then
     M_STATS=$(awk '/^>/ {if (seqlen){print seqlen}; seqlen=0; next} {seqlen += length($0)} END {print seqlen}' "$M_STATS_FILE" | sort -rn | \
     awk '{a[i++]=$1; s+=$1} END {if(s==0){print "0 0 0 0"} else {for(j=0;j<i;j++){t+=a[j]; if(t>=s/2){print s,i,a[j],j+1; break}}}}')
 else
     M_STATS="0 0 0 0"
 fi
-
 read -r M_LEN M_CNT M_N50 M_L50 <<< "${M_STATS:-0 0 0 0}"
 
-# Hybrid Polishing using Polypolish
+# Hybrid Polishing with Polypolish [Optional]
 if [[ -n "$R1" && -n "$R2" ]]; then
     echo "[$(date +%T)] 5/7: Hybrid Polishing (Polypolish)..."
     bwa index "$OUTDIR/medaka/consensus.fasta" > /dev/null 2>&1
@@ -134,23 +182,21 @@ else
     cp "$OUTDIR/medaka/consensus.fasta" "$FINAL_ASM"
 fi
 
-# Functional annotation using Prokka
+# Functional annotation with Prokka
 echo "[$(date +%T)] 6/7: Functional Annotation (Prokka)..."
 set +e
-# Standard Linux fix for expired tbl2asn
 echo -e '#!/bin/bash\necho "tbl2asn 25.8"' > "$OUTDIR/intermediate/tbl2asn"
 chmod +x "$OUTDIR/intermediate/tbl2asn"
 
-PROKKA_CMD="PATH=\"$OUTDIR/intermediate:\$PATH\" prokka --outdir \"$OUTDIR/annotation\" --coverage $PROKKA_COV --evalue $PROKKA_EVAL --prefix MOSTAR_Annotation --cpus \"$THREADS\" --kingdom Bacteria --force"
+PROKKA_CMD="PATH=\"$OUTDIR/intermediate:\$PATH\" prokka --outdir \"$OUTDIR/annotation\" --coverage $PROKKA_COV --evalue $PROKKA_EVAL --prefix mostar_Annotation --cpus \"$THREADS\" --kingdom Bacteria --force"
 [[ -n "$PROT_REF" ]] && PROKKA_CMD="$PROKKA_CMD --proteins \"$PROT_REF\""
 
-if eval "$PROKKA_CMD \"$FINAL_ASM\""; then PROKKA_SUCCESS=true; else PROKKA_SUCCESS=false; fi
+if eval "$PROKKA_CMD \"$FINAL_ASM\""; then PROKKA_SUCCESS=true; fi
 set -e
 
-# AMR Resistance profile using NCBI AMRFinderPlus (With Organism Mutation Search)
-echo "[$(date +%T)] 7/7: AMR Gene Detection..."
+# AMR Profiling with NCBI AMRFinder+
+echo "[$(date +%T)] 7/7: AMR Gene Detection... will use fasta if PROKKA failed/didnt run"
 if ! amrfinder --database_version > /dev/null 2>&1; then amrfinder -u; fi
-
 AMR_BASE="amrfinder --threads $THREADS --plus"
 [[ -n "$ORGANISM" ]] && AMR_BASE="$AMR_BASE -O $ORGANISM"
 
@@ -160,42 +206,35 @@ else
     eval "$AMR_BASE -n \"$FINAL_ASM\" > \"$OUTDIR/amr_results/AMR_Report.tsv\""
 fi
 
-# Cleanup 
-if [ "${CLEANUP:-false}" = true ]; then
-    echo "[$(date +%T)] Cleaning up intermediate SAM and FASTQ files..."
-    rm -f "$OUTDIR/intermediate/"*.sam "$OUTDIR/intermediate/ont_filt.fq.gz"
-fi
+# Cleanup
+[[ "${CLEANUP}" == "true" ]] && rm -f "$OUTDIR/intermediate/"*.sam "$OUTDIR/intermediate/ont_filt.fq.gz"
 
-# Calculate Assembly metrics 
-echo "[$(date +%T)] Calculating Assembly Metrics..."
+# Final Metrics
 METRICS=$(awk '/^>/ {if (seqlen){print seqlen}; seqlen=0; next} {seqlen += length($0)} END {print seqlen}' "$FINAL_ASM" | sort -rn | \
 awk '{a[i++]=$1; sum+=$1} END {if (sum==0) {print "0 0 0 0"; exit}; for(j=0;j<i;j++){total+=a[j]; if(total>=sum/2){print sum,i,a[j],j+1; break}}}')
-
-# Map variables with fallback
 read -r TOTAL_LEN CONTIG_CNT N50_VAL L50_VAL <<< "${METRICS:-0 0 0 0}"
 
-# FINAL SUMMARY
-echo ""
-echo "  MOSTAR-ASM PIPELINE COMPLETE"
-echo -e "METRIC\t\tMEDAKA (ONT)\t\tFINAL (HYBRID/POLISHED)"
-echo ""
-echo -e "Total Length\t${M_LEN:-0} bp\t\t${TOTAL_LEN} bp"
-echo -e "Contig Count\t${M_CNT:-0}\t\t\t${CONTIG_CNT}"
-echo -e "N50\t\t${M_N50:-0} bp\t\t${N50_VAL} bp"
-echo ""
-echo ""
-# Calculate the difference if Illumina was used
+# --- FINAL SUMMARY ---
+printf "%-15s %-20s %-20s\n" "METRIC" "MEDAKA (ONT)" "FINAL (POLISHED)"
+echo "--------------------------------------------------------"
+printf "%-15s %-20s %-20s\n" "Total Length" "${M_LEN:-0} bp" "${TOTAL_LEN:-0} bp"
+printf "%-15s %-20s %-20s\n" "Contig Count" "${M_CNT:-0}" "${CONTIG_CNT:-0}"
+printf "%-15s %-20s %-20s\n" "N50" "${M_N50:-0} bp" "${N50_VAL:-0} bp"
+echo "--------------------------------------------------------"
 if [[ -n "${R1:-}" ]]; then
     LEN_DIFF=$(( TOTAL_LEN - M_LEN ))
-    echo "Hybrid Polishing Effect: $LEN_DIFF bp change in total length."
-    echo "Polypolish was applied using provided Illumina reads."
+    echo -e "\n[Hybrid Mode Active]"
+    echo "Polypolish effect: $LEN_DIFF bp change in total length."
 else
-    echo "Mode: Long-read only (No Illumina provided)."
+    echo -e "\n[Long-read Mode Active]"
 fi
-echo ""
-echo "  OUTPUT FILES"
-echo "  Final Assembly:  $FINAL_ASM"
-echo "  AMR Report:      $OUTDIR/amr_results/AMR_Report.tsv"
-echo "  Annotations:     $OUTDIR/annotation/mostar_Annotation"
-echo ""
-echo "  Thank you for running MOSTAR-ASM! If you found this tool helpful, please cite"
+
+echo -e "\nTAXONOMY (Emu):"
+if [[ "$TOP_SPECIES" != "Not Run" ]]; then
+    echo "  Top Hit:   $TOP_SPECIES ($TOP_CONF%)"
+else
+    echo "  Taxonomy not run."
+fi
+
+echo -e "\nFINAL OUTPUT: $FINAL_ASM"
+echo -e "========================================================\n"

@@ -50,117 +50,110 @@ usage() {
     exit 1
 }
 
+# Generate a clean HTML-report with all the statistics
 generate_html_report() {
     local HTML_OUT="$OUTDIR/MOSTAR_Final_Report.html"
-    echo "[$(date +%T)] Generating HTML Dashboard..."
+    echo "[$(date +%T)] Generating Data-Heavy Clinical Dashboard..."
 
-    # Extract Annotation Stats from GFF for the report
-    local GFF="$OUTDIR/annotation/mostar_Annotation.gff"
-    local CDS_COUNT=$(grep -c "CDS" "$GFF" 2>/dev/null || echo "0")
-    local TRNA_COUNT=$(grep -c "tRNA" "$GFF" 2>/dev/null || echo "0")
-    local RRNA_COUNT=$(grep -c "rRNA" "$GFF" 2>/dev/null || echo "0")
+    # Capture Variables
+    local READS="${FILTERED_READ_COUNT:-0}"
+    local BWA_RATE="${BWA_MAPPING_RATE:-N/A}"
+    local DEPTH="${MEAN_DEPTH:-N/A}"
+    local COVERAGE="${GENOME_COV:-N/A}"
+    local ACCURACY="${EST_ACCURACY:-N/A}"
+    local Q_SCORE="${Q_VAL:-N/A}"
+    local CHANGES="${CHANGES_CNT:-0}"
+    local TAXID_VAL="${TOP_TAXID:-N/A}"
+    
+    # AMR Logic
+    local AMR_ROWS
+    if [[ -f "$OUTDIR/amr_results/AMR_Report.tsv" ]]; then
+        AMR_ROWS=$(awk -F'\t' 'NR>1 {
+            printf "<tr><td><span class=\"amr-tag\">%s</span></td><td><small>%s</small></td><td><div style=\"display:flex; align-items:center; gap:12px;\"><div class=\"val\" style=\"min-width:60px;\">%.2f%%</div><div class=\"identity-bar\" style=\"flex-grow:1;\"><div class=\"identity-fill\" style=\"width:%.2f%%\"></div></div></div></td></tr>", $6, $11, $17, $17
+        }' "$OUTDIR/amr_results/AMR_Report.tsv" | head -n 12)
+    else
+        AMR_ROWS="<tr><td colspan='3' style='text-align:center; padding:30px; color:#95a5a6;'>No resistance genes identified.</td></tr>"
+    fi
 
     cat <<EOF > "$HTML_OUT"
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
     <meta charset="UTF-8">
-    <title>MOSTAR Analysis Dashboard - $(basename "$ONT")</title>
     <style>
-        :root { --primary: #2c3e50; --accent: #3498db; --success: #27ae60; --danger: #e74c3c; --bg: #f8f9fa; }
-        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); margin: 0; padding: 20px; color: var(--primary); line-height: 1.6; }
-        .wrapper { max-width: 1200px; margin: auto; }
-        
-        /* Header */
-        .header { background: var(--primary); color: white; padding: 30px; border-radius: 12px; margin-bottom: 25px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .header h1 { margin: 0; font-size: 2.2rem; letter-spacing: -1px; }
-        .header p { margin: 5px 0 0; opacity: 0.8; font-size: 0.9rem; }
-
-        /* Grid Layout */
-        .main-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px; }
-        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #edf2f7; }
-        .card h2 { margin: 0 0 20px; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1px; color: #7f8c8d; border-bottom: 2px solid #f1f1f1; padding-bottom: 10px; }
-        
-        /* Tables */
+        :root { --primary: #1a2a3a; --accent: #3498db; --bg: #f8f9fa; --success: #27ae60; --gray: #7f8c8d; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg); padding: 25px; color: var(--primary); }
+        .wrapper { max-width: 1100px; margin: auto; }
+        .header { background: var(--primary); color: white; padding: 25px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .qc-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px; }
+        .qc-card { background: white; padding: 15px; border-radius: 10px; border: 1px solid #edf2f7; text-align: center; }
+        .qc-label { font-size: 0.7rem; color: var(--gray); text-transform: uppercase; display: block; margin-bottom: 5px; }
+        .qc-val { font-weight: bold; font-size: 1rem; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
         table { width: 100%; border-collapse: collapse; }
-        th, td { text-align: left; padding: 12px 8px; border-bottom: 1px solid #f1f1f1; }
-        th { font-size: 0.8rem; color: #95a5a6; }
-        .val { font-weight: 700; color: var(--primary); }
-        
-        /* AMR Visualization Tags */
-        .amr-tag { display: inline-block; background: #fff5f5; color: #c53030; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; border: 1px solid #feb2b2; }
-        .identity-bar { height: 8px; background: #edf2f7; border-radius: 4px; overflow: hidden; margin-top: 4px; }
-        .identity-fill { height: 100%; background: var(--accent); }
-
-        /* Species Highlight */
-        .species-hero { font-size: 1.5rem; font-weight: 800; color: var(--accent); margin-bottom: 5px; }
-        .mismatch-alert { background: #fff5f5; border: 1px solid #fed7d7; color: #c53030; padding: 10px; border-radius: 8px; font-size: 0.85rem; margin-top: 15px; }
-        
-        .footer { text-align: center; margin-top: 50px; color: #95a5a6; font-size: 0.8rem; }
+        td { padding: 12px 10px; border-bottom: 1px solid #f1f1f1; }
+        .val { font-weight: bold; color: var(--accent); }
+        .amr-tag { background: #fff5f5; color: #c0392b; padding: 3px 8px; border-radius: 4px; font-weight: bold; border: 1px solid #fed7d7; }
+        .identity-bar { height: 8px; background: #eee; border-radius: 4px; overflow: hidden; }
+        .identity-fill { height: 100%; background: var(--success); }
     </style>
 </head>
 <body>
     <div class="wrapper">
-        <header class="header">
-            <h1>MOSTAR <span style="font-weight: 300;">Bioinformatics</span></h1>
-            <p>Sample ID: <b>$(basename "$ONT")</b> | Date: $(date) | Pipeline Version: 1.0.0</p>
-        </header>
+        <div class="header">
+            <div>
+                <h1 style="margin:0;">MOSTAR <span style="font-weight:200;">Pipeline</span></h1>
+                <p style="margin:5px 0 0; opacity:0.8;">Sample: $(basename "$ONT")</p>
+            </div>
+            <div style="text-align:right;">
+                <b>Hybrid (Polypolish)</b><br><small>$(date)</small>
+            </div>
+        </div>
 
-        <div class="main-grid">
-            <section class="card">
-                <h2>Genome Quality</h2>
-                <table>
-                    <tr><th>Metric</th><th>Initial (ONT)</th><th>Final (Polished)</th></tr>
-                    <tr><td>Length</td><td>${M_LEN:-0}</td><td class="val">${TOTAL_LEN:-0} bp</td></tr>
-                    <tr><td>Contigs</td><td>${M_CNT:-0}</td><td class="val">${CONTIG_CNT:-0}</td></tr>
-                    <tr><td>N50</td><td>${M_N50:-0}</td><td class="val">${N50_VAL:-0} bp</td></tr>
-                </table>
-                $( [[ -n "${R1:-}" ]] && echo "<p style='font-size:0.8rem; color:var(--success); margin-top:15px;'>✔ Hybrid Polishing Applied: $(( TOTAL_LEN - M_LEN )) bp corrected.</p>" )
-            </section>
+        <div class="qc-row">
+            <div class="qc-card"><span class="qc-label">Filtlong Reads</span><span class="qc-val">$READS</span></div>
+            <div class="qc-card"><span class="qc-label">Mapping Rate</span><span class="qc-val">$BWA_RATE%</span></div>
+            <div class="qc-card"><span class="qc-label">Mean Depth</span><span class="qc-val">$DEPTH</span></div>
+            <div class="qc-card"><span class="qc-label">Genome Coverage</span><span class="qc-val">$COVERAGE</span></div>
+        </div>
 
-            <section class="card">
-                <h2>Taxonomy</h2>
-                <div class="species-hero">${TOP_SPECIES:-"Unknown Organism"}</div>
-                <div style="font-size: 0.9rem; color: #7f8c8d;">Abundance: <b>${TOP_CONF:-0}%</b></div>
-                
-                $( [[ "$TOP_SPECIES" == *"TaxID"* ]] && echo "<a href='https://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?id=$(echo $TOP_SPECIES | grep -oE "[0-9]+")' target='_blank' style='color:var(--accent); text-decoration:none; font-size:0.8rem;'>View on NCBI →</a>" )
-
-                $( [[ -n "$ORGANISM" && "$TOP_SPECIES" != *"$ORGANISM"* ]] && echo "<div class='mismatch-alert'>⚠️ <b>Species Mismatch:</b> Emu ID differs from target organism ($ORGANISM).</div>" )
-            </section>
-
-            <section class="card">
-                <h2>Functional Annotation</h2>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                    <div><small>CDS</small><div class="val" style="font-size: 1.2rem;">$CDS_COUNT</div></div>
-                    <div><small>tRNA</small><div class="val" style="font-size: 1.2rem;">$TRNA_COUNT</div></div>
-                    <div><small>rRNA</small><div class="val" style="font-size: 1.2rem;">$RRNA_COUNT</div></div>
-                </div>
-                <p style="font-size: 0.75rem; color: #95a5a6; margin-top: 20px;">Automated annotation performed via Prokka v1.14.6</p>
-            </section>
-
+        <div class="grid">
             <div class="card">
-            <h2>Antimicrobial Resistance (Top 5)</h2>
+                <h2 style="font-size:0.8rem; color:var(--gray); text-transform:uppercase;">Assembly & Polishing</h2>
+                <table>
+                    <tr><td>Total Length</td><td class="val">${TOTAL_LEN:-0} bp</td></tr>
+                    <tr><td>Pre-Polish Accuracy</td><td class="val">$ACCURACY ($Q_SCORE)</td></tr>
+                    <tr><td>Positions Changed</td><td class="val">$CHANGES</td></tr>
+                    <tr><td>Medaka Model</td><td class="val" style="font-size:0.75rem;">$MEDAKA_MODEL</td></tr>
+                </table>
+            </div>
+            <div class="card">
+                <h2 style="font-size:0.8rem; color:var(--gray); text-transform:uppercase;">Taxonomic ID (EMU)</h2>
+                <div style="font-size: 2.2rem; font-weight: 800; margin: 10px 0; color:var(--accent);">TaxID: $TAXID_VAL</div>
+                <div>Abundance: <span class="val">${TOP_CONF:-0}%</span></div>
+                <a href="https://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?id=$TAXID_VAL" target="_blank" style="font-size:0.75rem; color:var(--accent); text-decoration:none; margin-top:10px; display:inline-block;">Verify on NCBI →</a>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2 style="font-size:0.8rem; color:var(--gray); text-transform:uppercase;">Resistance Profile (NCBI)</h2>
             <table>
-                <tr><th>Gene</th><th>Class</th><th>Identity</th></tr>
-                $(if [[ -f "$OUTDIR/amr_results/AMR_Report.tsv" ]]; then
-                    # \$6=Gene, \$11=Class (e.g. BETA-LACTAM), \$17=Identity
-                    awk -F'\t' 'NR>1 {print "<tr><td><span class=\"amr-tag\">" \$6 "</span></td><td><small>" \$11 "</small></td><td><div class=\"val\">" \$17 "%</div><div class=\"identity-bar\"><div class=\"identity-fill\" style=\"width:" \$17 "%\"></div></div></td></tr>"}' "$OUTDIR/amr_results/AMR_Report.tsv" | head -n 5
-                  else
-                    echo "<tr><td colspan='3'>No resistance genes identified.</td></tr>"
-                  fi)
+                <tbody>$AMR_ROWS</tbody>
             </table>
         </div>
 
-        <footer class="footer">
-            Generated by MOSTAR (Multi-Omics Species & Taxonomy Assembly Report). <br>
-            Developed by Nermin Zecic. Citation: Zecic, N. (2026).
+        <footer style="text-align:center; padding:30px; font-size:0.7rem; color:var(--gray);">
+            MOSTAR Pipeline | Developed by Nermin Zecic | 2026
         </footer>
     </div>
 </body>
 </html>
 EOF
+
     echo "[$(date +%T)] Dashboard generated: $HTML_OUT"
 }
+
 
 # Defaults
 THREADS=10
@@ -196,36 +189,85 @@ done
 
 if [[ -z "${ONT:-}" || -z "${GSIZE:-}" || -z "${OUTDIR:-}" ]]; then usage; fi
 
+    echo ""
+    echo "      __      __   __    ____  _______   __     _____             "
+    echo "      | |\  /| |  /  \  / ___| |_   _|  /  \   | __  \            "
+    echo "      | | \/ | | | || | \___ \   | |   / /\ \  | |_) /            "
+    echo "      |_|\__/|_|  \__/  |____/   |_|  /_/  \_\ |_\ \_\            "
+    echo ""
+    echo ""
+
+
 # Init directories
 mkdir -p "$OUTDIR/intermediate" "$OUTDIR/logs" "$OUTDIR/amr_results"
 REAL_OUT=$(cd "$OUTDIR" && pwd)
 FINAL_ASM="$REAL_OUT/mostar_Assembly.fasta"
 
+echo ""
+echo ""
+echo "=============================================================================="
+echo "          Performing Short-read filtering using FastP"
+echo "=============================================================================="
+echo ""
+echo ""
+
 # Short-read QC with FastP [Optional]
 if [[ -n "$R1" && -n "$R2" ]]; then
-    echo "[$(date +%T)] 1/7: Short-read QC (fastp)..."
+    echo "[$(date +%T)]: Running Short-read QC using using FastP"
     fastp --in1 "$R1" --in2 "$R2" --out1 "$OUTDIR/intermediate/sh_R1.fq.gz" --out2 "$OUTDIR/intermediate/sh_R2.fq.gz" \
           --thread "$THREADS" --json "$OUTDIR/logs/fastp.json" --html "$OUTDIR/logs/fastp.html" > /dev/null 2>&1
 fi
-
+echo ""
+echo ""
+echo "=============================================================================="
+echo "          Performing Long-read filtering using Filtlong"
+echo "=============================================================================="
+echo ""
+echo ""
 # Long-read filtering with Filtlong
-echo "[$(date +%T)] 2/7: Long-read filtering (filtlong)..."
-G_VAL=$(echo "$GSIZE" | sed 's/[a-zA-Z]//g')
+G_VAL=$(echo "${GSIZE:-0}" | sed 's/[a-zA-Z]//g')
+UNIT=$(echo "${GSIZE:-}" | grep -o '[a-zA-Z]' || echo "")
+if [[ -z "$G_VAL" ]]; then G_VAL=0; fi
 TARGET_VAL=$(echo "$G_VAL * $FILTLONG_COV" | bc | cut -d. -f1)
-UNIT=$(echo "$GSIZE" | grep -o '[a-zA-Z]' || echo "")
 TARGET_STR="${TARGET_VAL}${UNIT}"
+echo "[$(date +%T)] 2/7: Long-read filtering (Filtlong)..."
+echo "[$(date +%T)] Target depth: $FILTLONG_COV x (Targeting: $TARGET_STR)"
 
-FILTLONG_OPTS="--min_length 1000 --target_bases $TARGET_STR"
-[[ -n "$R1" && -n "$R2" ]] && FILTLONG_OPTS="$FILTLONG_OPTS -1 $OUTDIR/intermediate/sh_R1.fq.gz -2 $OUTDIR/intermediate/sh_R2.fq.gz"
-filtlong $FILTLONG_OPTS "$ONT" | gzip > "$OUTDIR/intermediate/ont_filt.fq.gz"
+if [[ -n "${R1:-}" ]]; then
+    echo "[$(date +%T)] Hybrid filtering mode active..."
+    filtlong --min_length 1000 --keep_percent 90 --target_bases "$TARGET_STR" \
+             -1 "$OUTDIR/intermediate/sh_R1.fq.gz" \
+             -2 "$OUTDIR/intermediate/sh_R2.fq.gz" \
+             "$ONT" > "$OUTDIR/intermediate/ont_filt.fq" 2> "$OUTDIR/logs/filtlong.log"
+else
+    echo "[$(date +%T)] Long-read only filtering mode active..."
+    filtlong --min_length 1000 --keep_percent 90 --target_bases "$TARGET_STR" \
+             "$ONT" > "$OUTDIR/intermediate/ont_filt.fq" 2> "$OUTDIR/logs/filtlong.log"
+fi
 
+echo "[$(date +%T)] Finalizing filtered reads..."
+gzip -f "$OUTDIR/intermediate/ont_filt.fq"
+
+if [[ -f "$OUTDIR/logs/filtlong.log" ]]; then
+    READS_RAW=$(grep -A 1 "Scoring long reads" "$OUTDIR/logs/filtlong.log" | tail -n 1 | awk '{print $1$2}' | tr -d '[:alpha:][:space:]')
+    FILTERED_READ_COUNT=$(printf "%'d" "${READS_RAW:-0}")
+fi
+
+echo ""
+echo ""
+echo "=============================================================================="
+echo "              Running Taxonomic classification with EMU"
+echo "=============================================================================="
+echo ""
+echo""
 # Taxonomic classification with EMU [Optional]
 if [[ -n "${EMU_DB:-}" ]]; then
     EMU_FASTA="$EMU_DB/species_taxid.fasta"
     EMU_TAX="$EMU_DB/taxonomy.tsv"
 
+    # Database Auto-Download
     if [[ ! -f "$EMU_FASTA" || ! -f "$EMU_TAX" ]]; then
-        echo "[$(date +%T)] Emu database not found. Initiating auto-download..."
+        echo "[$(date +%T)] Emu database not found in $EMU_DB. Initiating auto-download..."
         mkdir -p "$EMU_DB"
         (
             cd "$EMU_DB"
@@ -236,90 +278,138 @@ if [[ -n "${EMU_DB:-}" ]]; then
         )
     fi
 
+    # Run EMU
     if [[ -f "$EMU_FASTA" && -f "$EMU_TAX" ]]; then
-        echo "[$(date +%T)] Running Species ID (Emu)..."
+        echo "[$(date +%T)] Running Taxonomy (Emu)..."
         mkdir -p "$OUTDIR/taxonomy"
         emu abundance "$OUTDIR/intermediate/ont_filt.fq.gz" \
                       --db "$EMU_DB" \
                       --threads "$THREADS" \
                       --output-dir "$OUTDIR/taxonomy"
 
-        # Find the report (Emu names it based on the input file)
-        EMU_REPORT=$(ls "$OUTDIR/taxonomy/"*rel-abundance.tsv 2>/dev/null | head -n 1)
-
-        if [[ -f "$EMU_REPORT" ]]; then
-            # Use awk for math to avoid printf conversion errors
-            RAW_ID=$(awk -F'\t' 'NR==2 {print $1}' "$EMU_REPORT")
-            TOP_CONF=$(awk -F'\t' 'NR==2 {printf "%.2f", $2*100}' "$EMU_REPORT")
-
-            case "$RAW_ID" in
-                727)  TOP_SPECIES="Haemophilus influenzae (TaxID: 727)" ;;
-                562)  TOP_SPECIES="Escherichia coli (TaxID: 562)" ;;
-                1280) TOP_SPECIES="Staphylococcus aureus (TaxID: 1280)" ;;
-                *)
-                    # If it's a number, label it; otherwise, take the name
-                    if [[ "$RAW_ID" =~ ^[0-9]+$ ]]; then
-                        TOP_SPECIES="NCBI TaxID: $RAW_ID"
-                    else
-                        TOP_SPECIES=$(echo "$RAW_ID" | awk -F';' '{print $NF}')
-                    fi
-                    ;;
-            esac
-        else
-            TOP_SPECIES="No hits found"; TOP_CONF="0"
+        # Capture the Raw TaxID
+        RAW_REPORT=$(ls "$OUTDIR/taxonomy/"*rel-abundance.tsv 2>/dev/null | grep -v "species" | head -n 1)
+        if [[ -f "$RAW_REPORT" ]]; then
+            TOP_TAXID=$(awk -F'\t' 'NR==2 {print $1}' "$RAW_REPORT")
+            RAW_CONF=$(awk -F'\t' 'NR==2 {print $2}' "$RAW_REPORT")
+            TOP_CONF=$(awk "BEGIN {printf \"%.2f\", $RAW_CONF * 100}")
         fi
     else
-        echo "[!] Error: Emu database files missing. Skipping taxonomy."
-        TOP_SPECIES="Failed"; TOP_CONF="0"
+        echo "[!] Error: Emu database files missing after download attempt. Skipping."
     fi
 fi
-
+echo ""
+echo ""
+echo "=============================================================================="
+echo "                  De-novo assembly with Flye"
+echo "=============================================================================="
+echo ""
+echo ""
 # De Novo Assembly with Flye
-echo "[$(date +%T)] 3/7: De Novo Assembly (Flye)..."
-flye --nano-hq "$OUTDIR/intermediate/ont_filt.fq.gz" --genome-size "$GSIZE" --threads "$THREADS" --out-dir "$OUTDIR/flye"
+flye --nano-hq "$OUTDIR/intermediate/ont_filt.fq.gz" \
+     --genome-size "$GSIZE" \
+     --threads "$THREADS" \
+     --out-dir "$OUTDIR/flye"
 
+echo ""
+echo ""
+echo "=============================================================================="
+echo "           Read-error correction and consensus extraction with Medaka"
+echo "=============================================================================="
+echo ""
+echo ""
 # Polishing and error-correction with Medaka
-echo "[$(date +%T)] 4/7: Long-read polishing (Medaka)..."
-medaka_consensus -i "$OUTDIR/intermediate/ont_filt.fq.gz" -d "$OUTDIR/flye/assembly.fasta" \
-                 -m "$MEDAKA_MODEL" -t "$THREADS" -o "$OUTDIR/medaka"
-
-# Statistics for Medaka
+medaka_consensus -i "$OUTDIR/intermediate/ont_filt.fq.gz" -d "$OUTDIR/flye/assembly.fasta" -m "$MEDAKA_MODEL" -t "$THREADS" -o "$OUTDIR/medaka"
 M_STATS_FILE="$OUTDIR/medaka/consensus.fasta"
-if [[ -f "$M_STATS_FILE" ]]; then
-    M_STATS=$(awk '/^>/ {if (seqlen){print seqlen}; seqlen=0; next} {seqlen += length($0)} END {print seqlen}' "$M_STATS_FILE" | sort -rn | \
-    awk '{a[i++]=$1; s+=$1} END {if(s==0){print "0 0 0 0"} else {for(j=0;j<i;j++){t+=a[j]; if(t>=s/2){print s,i,a[j],j+1; break}}}}')
-else
-    M_STATS="0 0 0 0"
-fi
+M_STATS=$(awk '/^>/ {if (seqlen){print seqlen}; seqlen=0; next} {seqlen += length($0)} END {print seqlen}' "$M_STATS_FILE" | sort -rn | awk '{a[i++]=$1; s+=$1} END {if(s==0){print "0 0 0 0"} else {for(j=0;j<i;j++){t+=a[j]; if(t>=s/2){print s,i,a[j],j+1; break}}}}')
 read -r M_LEN M_CNT M_N50 M_L50 <<< "${M_STATS:-0 0 0 0}"
 
-# Hybrid Polishing with Polypolish [Optional]
+echo ""
+echo ""
+echo "=============================================================================="
+echo "              Performing Long-read filtering using Polypolish"
+echo "=============================================================================="
+echo ""
+echo ""
+
+# Hybrid Polishing with Polypolish [Only in hybrid-mode]
+echo "=============================================================================="
+echo "              Performing Hybrid Polishing using Polypolish"
+echo "=============================================================================="
+
+# Hybrid Polishing with Polypolish [Only in hybrid-mode]
 if [[ -n "$R1" && -n "$R2" ]]; then
     echo "[$(date +%T)] 5/7: Hybrid Polishing (Polypolish)..."
+    
+    # Align Short Reads
     bwa index "$OUTDIR/medaka/consensus.fasta" > /dev/null 2>&1
     bwa mem -t "$THREADS" "$OUTDIR/medaka/consensus.fasta" "$OUTDIR/intermediate/sh_R1.fq.gz" > "$OUTDIR/intermediate/1.sam"
     bwa mem -t "$THREADS" "$OUTDIR/medaka/consensus.fasta" "$OUTDIR/intermediate/sh_R2.fq.gz" > "$OUTDIR/intermediate/2.sam"
-    polypolish filter --in1 "$OUTDIR/intermediate/1.sam" --in2 "$OUTDIR/intermediate/2.sam" --out1 "$OUTDIR/intermediate/f1.sam" --out2 "$OUTDIR/intermediate/f2.sam"
-    polypolish polish "$OUTDIR/medaka/consensus.fasta" "$OUTDIR/intermediate/f1.sam" "$OUTDIR/intermediate/f2.sam" > "$FINAL_ASM"
+    
+    # Generate Mapping Rate
+    # We use samtools flagstat on one of the SAM files to get the mapping %
+    samtools flagstat "$OUTDIR/intermediate/1.sam" > "$OUTDIR/logs/bwa_flagstat.txt"
+    BWA_MAPPING_RATE=$(awk -F'[()]' '/mapped / {print $2}' "$OUTDIR/logs/bwa_flagstat.txt" | head -n 1 | awk '{print $1}' | tr -d '%')
+
+    # Filter and Polish
+    polypolish filter --in1 "$OUTDIR/intermediate/1.sam" --in2 "$OUTDIR/intermediate/2.sam" \
+                      --out1 "$OUTDIR/intermediate/f1.sam" --out2 "$OUTDIR/intermediate/f2.sam"
+    
+    POLY_LOG="$OUTDIR/logs/polypolish.log"
+    polypolish polish "$OUTDIR/medaka/consensus.fasta" "$OUTDIR/intermediate/f1.sam" "$OUTDIR/intermediate/f2.sam" \
+                      2>&1 | tee "$POLY_LOG" > "$FINAL_ASM"
+
+    # Scrape variables
+    MEAN_DEPTH=$(grep "mean read depth:" "$POLY_LOG" | awk '{print $4}')
+    POS_CHANGED=$(grep "positions changed" "$POLY_LOG" | awk '{print $1}')
+    EST_ACC=$(grep "estimated pre-polishing sequence accuracy:" "$POLY_LOG" | awk '{print $5}')
+    Q_VAL=$(grep "estimated pre-polishing" "$POLY_LOG" | awk -F'[()]' '{print $2}')
 else
+    # ONT-Only Mode
     cp "$OUTDIR/medaka/consensus.fasta" "$FINAL_ASM"
+    BWA_MAPPING_RATE="N/A"
+    MEAN_DEPTH="N/A"; POS_CHANGED="0"; EST_ACC="N/A"; Q_VAL="N/A"
 fi
 
+echo ""
+echo ""
+echo "=============================================================================="
+echo "                  Functional annotation with PROKKA"
+echo "=============================================================================="
+echo ""
+echo ""
 # Functional annotation with Prokka
-echo "[$(date +%T)] 6/7: Functional Annotation (Prokka)..."
 set +e
+mkdir -p "$OUTDIR/annotation"
+
+# Fix for Prokka/tbl2asn error on newer systems
 echo -e '#!/bin/bash\necho "tbl2asn 25.8"' > "$OUTDIR/intermediate/tbl2asn"
 chmod +x "$OUTDIR/intermediate/tbl2asn"
 
 PROKKA_CMD="PATH=\"$OUTDIR/intermediate:\$PATH\" prokka --outdir \"$OUTDIR/annotation\" --coverage $PROKKA_COV --evalue $PROKKA_EVAL --prefix mostar_Annotation --cpus \"$THREADS\" --kingdom Bacteria --force"
 [[ -n "$PROT_REF" ]] && PROKKA_CMD="$PROKKA_CMD --proteins \"$PROT_REF\""
 
-if eval "$PROKKA_CMD \"$FINAL_ASM\""; then PROKKA_SUCCESS=true; fi
+if eval "$PROKKA_CMD \"$FINAL_ASM\"" > "$OUTDIR/logs/prokka.log" 2>&1; then
+    PROKKA_SUCCESS=true
+    echo "[$(date +%T)] Prokka completed successfully."
+else
+    PROKKA_SUCCESS=false
+    echo "[!] WARNING: Prokka failed. Proceeding with limited AMR detection."
+fi
 set -e
+
+echo ""
+echo ""
+echo "=============================================================================="
+echo "              AMR-resistance profile with NCBI-AMRFinder+"
+echo "=============================================================================="
+echo ""
+echo ""
 
 # AMR Profiling with NCBI AMRFinder+
 echo "[$(date +%T)] 7/7: AMR Gene Detection... will use fasta if PROKKA failed/didnt run"
 if ! amrfinder --database_version > /dev/null 2>&1; then amrfinder -u; fi
+
 AMR_BASE="amrfinder --threads $THREADS --plus"
 [[ -n "$ORGANISM" ]] && AMR_BASE="$AMR_BASE -O $ORGANISM"
 
@@ -329,17 +419,35 @@ else
     eval "$AMR_BASE -n \"$FINAL_ASM\" > \"$OUTDIR/amr_results/AMR_Report.tsv\""
 fi
 
+echo ""
+echo ""
+echo "=============================================================================="
+echo "                  Cleaning up and deleting intermediate files"
+echo "=============================================================================="
+echo ""
+echo ""
+
 # Cleanup
 [[ "${CLEANUP}" == "true" ]] && rm -f "$OUTDIR/intermediate/"*.sam "$OUTDIR/intermediate/ont_filt.fq.gz"
 
-# Final Metrics
 METRICS=$(awk '/^>/ {if (seqlen){print seqlen}; seqlen=0; next} {seqlen += length($0)} END {print seqlen}' "$FINAL_ASM" | sort -rn | \
 awk '{a[i++]=$1; sum+=$1} END {if (sum==0) {print "0 0 0 0"; exit}; for(j=0;j<i;j++){total+=a[j]; if(total>=sum/2){print sum,i,a[j],j+1; break}}}')
 read -r TOTAL_LEN CONTIG_CNT N50_VAL L50_VAL <<< "${METRICS:-0 0 0 0}"
 
-# SUMMARY
-
-echo "========================================================"
+if [[ "${CLEANUP}" == "true" ]]; then
+    echo "[$(date +%T)] Cleaning up intermediate files..."
+    rm -f "$OUTDIR/intermediate/"*.sam
+    rm -f "$OUTDIR/intermediate/ont_filt.fq" # Ensure uncompressed filt is removed
+fi
+echo ""
+echo ""
+echo "=============================================================================="
+echo "                      MOSTAR-ASM Pipeline complete!"
+echo "=============================================================================="
+echo ""
+echo ""
+echo "=================================================================================="
+echo "=================================================================================="
 printf "%-15s %-20s %-20s\n" "METRIC" "MEDAKA (ONT)" "FINAL (POLISHED)"
 echo "--------------------------------------------------------"
 printf "%-15s %-20s %-20s\n" "Total Length" "${M_LEN:-0} bp" "${TOTAL_LEN:-0} bp"
@@ -347,24 +455,15 @@ printf "%-15s %-20s %-20s\n" "Contig Count" "${M_CNT:-0}" "${CONTIG_CNT:-0}"
 printf "%-15s %-20s %-20s\n" "N50" "${M_N50:-0} bp" "${N50_VAL:-0} bp"
 echo "--------------------------------------------------------"
 
-if [[ -n "${R1:-}" ]]; then
-    LEN_DIFF=$(( TOTAL_LEN - M_LEN ))
-    echo -e "\n[Hybrid Mode Active]"
-    echo "Polypolish effect: $LEN_DIFF bp change in total length."
-else
-    echo -e "\n[Long-read Mode Active]"
-fi
-
-echo -e "\nTAXONOMY (Emu):"
-echo "  Top Hit:   ${TOP_SPECIES} (${TOP_CONF}%)"
-
-# --- GENERATE REPORTS ---
+# Generate report using all captured variables
 generate_html_report
 
-echo -e "\nFINAL OUTPUT: $FINAL_ASM"
-echo -e "\nThank you for using MOSTAR! If you found this pipeline useful, please cite."
+echo "================================================================================="
+echo "    MOSTAR Pipeline complete! Final Report: $OUTDIR/MOSTAR_Final_Report.html"
 echo ""
-echo "  MOSTAR-ASM PIPELINE COMPLETE"
+echo "              If you found this pipeline useful, please cite!"
 echo ""
-echo "  Report Dashboard: $OUTDIR/MOSTAR_Final_Report.html"
+echo "                         | Nermin Zecic, 2026 |"
+echo "================================================================================="
+echo ""
 echo ""

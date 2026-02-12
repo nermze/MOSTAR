@@ -339,15 +339,13 @@ echo "==========================================================================
 
 # Hybrid Polishing with Polypolish [Only in hybrid-mode]
 if [[ -n "$R1" && -n "$R2" ]]; then
-    echo "[$(date +%T)] 5/7: Hybrid Polishing (Polypolish)..."
     
     # Align Short Reads
     bwa index "$OUTDIR/medaka/consensus.fasta" > /dev/null 2>&1
     bwa mem -t "$THREADS" "$OUTDIR/medaka/consensus.fasta" "$OUTDIR/intermediate/sh_R1.fq.gz" > "$OUTDIR/intermediate/1.sam"
     bwa mem -t "$THREADS" "$OUTDIR/medaka/consensus.fasta" "$OUTDIR/intermediate/sh_R2.fq.gz" > "$OUTDIR/intermediate/2.sam"
     
-    # Generate Mapping Rate
-    # We use samtools flagstat on one of the SAM files to get the mapping %
+    # Generate Mapping Rate for the report
     samtools flagstat "$OUTDIR/intermediate/1.sam" > "$OUTDIR/logs/bwa_flagstat.txt"
     BWA_MAPPING_RATE=$(awk -F'[()]' '/mapped / {print $2}' "$OUTDIR/logs/bwa_flagstat.txt" | head -n 1 | awk '{print $1}' | tr -d '%')
 
@@ -359,16 +357,23 @@ if [[ -n "$R1" && -n "$R2" ]]; then
     polypolish polish "$OUTDIR/medaka/consensus.fasta" "$OUTDIR/intermediate/f1.sam" "$OUTDIR/intermediate/f2.sam" \
                       2>&1 | tee "$POLY_LOG" > "$FINAL_ASM"
 
-    # Scrape variables
+    # Scrape variables 
     MEAN_DEPTH=$(grep "mean read depth:" "$POLY_LOG" | awk '{print $4}')
     POS_CHANGED=$(grep "positions changed" "$POLY_LOG" | awk '{print $1}')
+    # Grabs the percentage (e.g., 99.9257%)
     EST_ACC=$(grep "estimated pre-polishing sequence accuracy:" "$POLY_LOG" | awk '{print $5}')
+    # Grabs the Q-score (e.g., Q31.29)
     Q_VAL=$(grep "estimated pre-polishing" "$POLY_LOG" | awk -F'[()]' '{print $2}')
 else
-    # ONT-Only Mode
+    # ONT-Only Mode: Explicitly bind all variables to prevent 'unbound variable' errors
+    echo "[$(date +%T)] 5/7: Short reads not provided. Skipping Hybrid Polishing."
     cp "$OUTDIR/medaka/consensus.fasta" "$FINAL_ASM"
+    
     BWA_MAPPING_RATE="N/A"
-    MEAN_DEPTH="N/A"; POS_CHANGED="0"; EST_ACC="N/A"; Q_VAL="N/A"
+    MEAN_DEPTH="N/A"
+    POS_CHANGED="0"
+    EST_ACC="N/A"
+    Q_VAL="N/A"
 fi
 
 echo ""

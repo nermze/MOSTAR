@@ -6,7 +6,7 @@
 
 # MOSTAR-Pipeline
 
-### (Multimodal ONT and Short-read Tool for Assembly and Refinement)
+### Multimodal ONT and Short-read Tool for Assembly and Refinement
 MOSTAR is a comprehensive bioinformatics pipeline designed to bridge the gap between long-read structural continuity and short-read base-pair accuracy. However, if short-reads are omitted, the pipeline will auto-switch to ONT-only mode. By integrating Oxford Nanopore Technologies (ONT) with Illumina sequencing, the pipeline reconstructs highly polished bacterial genomes. It performs hybrid and long-read assemblies, polishing, functional annotation, AMR profiling, and taxonomic classification — with built-in quality controls and an interactive HTML report. The pipeline will work with any bacteria, as long as the genome size and correct ONT model are specified. 
 
 Note: Some settings are hard-coded in the intial release of the pipeline, but several of the included tools can be fine-tuned by passing optional arguments. 

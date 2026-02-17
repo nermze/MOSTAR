@@ -4,42 +4,67 @@
 </p>
 </p>
 
-# MOSTAR-ASM (Multimodal ONT and Short-read Tool for Assembly and Refinement)
+# MOSTAR-Pipeline
 
-MOSTAR-ASM is a comprehensive bioinformatics pipeline designed to bridge the gap between long-read structural continuity and short-read base-pair accuracy. By integrating Oxford Nanopore Technologies (ONT) with Illumina sequencing, the pipeline reconstructs highly polished bacterial genomes. It performs hybrid and long-read assemblies, polishing, functional annotation, AMR profiling, and taxonomic classification — with built-in quality controls and an interactive HTML report. 
+### (Multimodal ONT and Short-read Tool for Assembly and Refinement)
+MOSTAR is a comprehensive bioinformatics pipeline designed to bridge the gap between long-read structural continuity and short-read base-pair accuracy. However, if short-reads are omitted, the pipeline will auto-switch to ONT-only mode. By integrating Oxford Nanopore Technologies (ONT) with Illumina sequencing, the pipeline reconstructs highly polished bacterial genomes. It performs hybrid and long-read assemblies, polishing, functional annotation, AMR profiling, and taxonomic classification — with built-in quality controls and an interactive HTML report. The pipeline will work with any bacteria, as long as the genome size and correct ONT model are specified. 
 
-# Hybrid assembly: Combines ONT long reads and Illumina short reads for high-quality assemblies
-1. Trimming: Filtlong 
-2. Polishing: Medaka for long-read polishing; Polypolish for hybrid polishing
-3. Assembly: De-Novo Assembly with Flye
-4. Trimming: FastP for adapter and QC trimming of short reads
-5. Taxonomic profiling: EMU-based species identification with automatic database handling
+Note: Some settings are hard-coded in the intial release of the pipeline, but several of the included tools can be fine-tuned by passing optional arguments. 
+
+### Hybrid assembly: Combines ONT long reads and Illumina short reads for high-quality assemblies
+1. Short-read quality trimming: FastP for adapter & QC trimming
+2. Long-read quality trimming: Filtlong for QC trimming 
+3. Taxonomic profiling: EMU-based species identification with automatic database handling
+4. Assembly: De-Novo Assembly with Flye
+5. Polishing: Medaka for long-read polishing; Polypolish for hybrid polishing
 6. Functional annotation: PROKKA annotation with customizable protein/GenBank references
 7. AMR profiling: NCBI AMRFinder+ integration for detecting antimicrobial resistance genes
 8. Comprehensive report: Generates a detailed HTML report with metrics, top taxa, and AMR results
 
-# ONT-only
-1. Quality filter with Filtlong
-2. De-novo assembly with Flye
-3. Long-read consensus correction with Medaka
-4. Functional Annotation with PROKKA (optional)
+#### ONT-only assembly:
+1. Long-read quality trimming: Filtlong 
+2. Taxonomic profiling: EMU-based species identification with automatic database handling
+3. De-novo assembly with Flye
+4. Long-read consensus correction with Medaka
+5. Functional annotation: PROKKA annotation with customizable protein/GenBank references
 6. NCBI AMRFinder+ resistance profile 
 8. Complete report in HTML-format
 
 
-# Requirements and input files
+### Requirements and input files
 <pre>
+# In its simplest form, MOSTAR requires only 
 1. ONT-reads 
 2. Illumina paired end reads (R1/R2) (Optional)
-3. Correct model (Very important!) (Default: r1041_e82_400bps_sup_v5.2.0) 
-  
-Functional Annotation with PROKKA (Optional)
-1. Genbank reference sequence 
+3. Correct model (Very important!) (Default: r1041_e82_400bps_sup_v5.2.0)
+4. Output folder 
 
-Taxonomic Classification with EMU 
-1. Specify EMU-db path
+# Hybrid mode: 
+mostar -n ont.fq.gz -g [size] -o [dir]  -1 R1.fq -2 R2.fq
 
+# ONT-only mode:
+mostar -n ont.fq.gz -g [size] -o [dir]
 
+# Include EMU taxonomy, functional annotation with Prokka, and specify organism for AMRFinder+
+# Remember to change (-g), (-m) and (-o) to match your organism, here we use Haemophilus influenzae as an example
+
+mostar -n ont_read.fastq.gz -1 read1.fastq.gz -2 read2.fastq.gz -g 2.1m -o Output -p Haemophilus_influenzae -a L42023.1.gb -p Haemophilus_influenzae -k ./emu_db -m r1041_e82_400bps_sup_v5.2.0
+
+# To run the pipeline in ONT-only mode, just omit read1/read2. 
+</pre>
+
+### Output files
+A successfull run wil contain the following, including the final polished fasta and html-report.
+<pre>
+  Output_folder
+  |- amr_results
+  |- annotation
+  |- flye
+  |- intermediate
+  |- logs
+  |- medaka
+  |- MOSTAR_Assembly.fasta
+  |- MOSTAR_Final_Report.html
 </pre>
 
 
@@ -60,10 +85,10 @@ Taxonomic Classification with EMU
 # Installation (Conda or Mamba)
 <pre>
 # Clone the repository:
-git clone https://github.com/nermze/MOSTAR-ASM.git
+git clone https://github.com/nermze/MOSTAR.git
 
 # Change dir:
-cd MOSTAR-ASM
+cd MOSTAR
 
 # Create a conda env with all dependencies from the provided yml:
 conda env create -f environment.yml
@@ -86,17 +111,6 @@ Please create the environment using Intel-emulation (Rosetta 2) before install:
 CONDA_SUBDIR=osx-64 conda env create -f environment.yml
 conda activate mostar_env
 conda config --env --set subdir osx-64
-</pre>
-
-# Basic Usage:
-<pre>
-# Hybrid Assembly, Polish & AMR
-mostar -1 R1.fastq.gz -2 R2.fastq.gz -n long_reads.fastq.gz -g 2.1m -o results
-
-# Hybrid Assembly, Polish, AMR, Annotate & Taxonomy:
-mostar -1 R1.fastq.gz -2 R2.fastq.gz -n long_reads.fastq.gz -g 2.1m -a reference.gbk --o results
-
-
 </pre>
 
 ### Command-Line Arguments
@@ -130,7 +144,7 @@ mostar -1 R1.fastq.gz -2 R2.fastq.gz -n long_reads.fastq.gz -g 2.1m -a reference
 
 # Troubleshooting and known issues
 Q: My assembly is poor
-A: You have to specify the correct expected genome size (-g) and model r1041.XX (-m)
+A: You have to specify the correct expected genome size (-g) and model example r1041.XX (-m)
 
 Q: My assembly is still failing
 A: Your input data might be too low quailty. Try more robust trim settings.  
@@ -142,7 +156,7 @@ Q. My exact model is not accepted
 A. you may need to downgrade medaka or install a specific version. You can do this by typing: conda install -c bioconda medaka=your_version, example medaka=2.2.0 
 
 Q. I'm experiencing issues with annotations using Apple silicone (M-series)
-A. Skip the annotation step and annotate the final polished fasta manually
+A. This is a known issue stemming from blastn
 
 # Maintainer and author
 [![GitHub](https://img.shields.io/badge/GitHub-nermze-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/nermze)

@@ -21,7 +21,7 @@ Note: Some settings are hard-coded in the intial release of the pipeline, but se
 7. AMR profiling: NCBI AMRFinder+ integration for detecting antimicrobial resistance genes
 8. Comprehensive report: Generates a detailed HTML report with metrics, top taxa, and AMR results
 
-#### ONT-only assembly:
+### ONT-only assembly:
 1. Long-read quality trimming: Filtlong 
 2. Taxonomic profiling: EMU-based species identification with automatic database handling
 3. De-novo assembly with Flye
@@ -119,28 +119,17 @@ conda config --env --set subdir osx-64
 | `-n` | ONT Reads | Nanopore long-reads (.fastq.gz) |
 | `-1` | Illumina R1 | Forward short-reads (.fastq.gz) |
 | `-2` | Illumina R2 | Reverse short-reads (.fastq.gz) |
-| `-m` | Medaka model | Default: r1041_e82_400bps_sup_v5.2.0) |
+| `-m` | Model | Default: r1041_e82_400bps_sup_v5.2.0) |
 | `-g` | Genome Size | Estimated size (e.g., 2.1m) |
-| `-p` | Organism | AMRFinder+ (e.g., Escherichia, Staphylococcus) |
+| `-p` | AMRFinder+ | Organism (e.g., Escherichia, Staphylococcus) |
 | `-o` | Output | Directory name for output files |
-| `-a` | Reference | (Optional) Reference .gbk for Prokka |
-| `-f` | Output | Directory name for output files |
-| `-c` | Output | Directory name for output files |
-| `-i` | Output | Directory name for output files |
-| `-x` | Output | Directory name for output files |
+| `-f` | Filtlong | Target coverage (Default:100) |
+| `-a` | Prokka | Reference .gbk for Prokka 
+| `-c` | Coverage | Minimum coverage for Prokka (Default: 80) |
+| `-i` | Identity | e-value for Prokka (Default: 1e-09) |
+| `-x` | Cleanup | Delete intermediate files |
+| `-h` | Help | Show help menu |
 
-
-
-### Output and folder structure
-| File | Type | Description |
-| :--- | :--- | :--- |
-| `1` | amr_results | NCBI AMRFinder+ results |
-| `2` | annotation | Annotations by PROKKA |
-| `3` | flye | De-novo assembly |
-| `4` | Intermediate  | Temporary and intermediate files |
-| `5` | Logs | Run log |
-| `6` | MEDAKA | Consensus sequence |
-| `7` | MOSTAR_Assembly.fasta | Final polished genome. |
 
 # Troubleshooting and known issues
 Q: My assembly is poor

@@ -7,7 +7,7 @@
 # MOSTAR-Pipeline
 
 ### Multimodal ONT and Short-read Tool for Assembly and Refinement
-MOSTAR is a comprehensive bioinformatics pipeline designed to bridge the gap between long-read structural continuity and short-read base-pair accuracy. However, if short-reads are omitted, the pipeline will auto-switch to ONT-only mode. By integrating Oxford Nanopore Technologies (ONT) with Illumina sequencing, the pipeline reconstructs highly polished bacterial genomes. It performs hybrid and long-read assemblies, polishing, functional annotation, AMR profiling, and taxonomic classification — with built-in quality controls and an interactive HTML report. The pipeline will work with any bacteria, as long as the genome size and correct ONT model are specified. 
+MOSTAR is a comprehensive bioinformatics pipeline designed to bridge the gap between long-read structural continuity and short-read base-pair accuracy. By integrating Oxford Nanopore Technologies (ONT) with Illumina sequencing, the pipeline reconstructs highly polished bacterial genomes. It performs hybrid and long-read assemblies, polishing, functional annotation, AMR profiling, and taxonomic classification — with built-in quality controls and an interactive HTML report. However, if short-reads are omitted, the pipeline will auto-switch to ONT-only mode. The pipeline will work with any bacteria, as long as the genome size and correct ONT model are specified. 
 
 Note: Some settings are hard-coded in the intial release of the pipeline, but several of the included tools can be fine-tuned by passing optional arguments. 
 
@@ -42,15 +42,15 @@ Note: Some settings are hard-coded in the intial release of the pipeline, but se
 # Hybrid mode: 
 mostar -n ont.fq.gz -g [size] -o [dir]  -1 R1.fq -2 R2.fq
 
-# ONT-only mode:
-mostar -n ont.fq.gz -g [size] -o [dir]
-
 # Include EMU taxonomy, functional annotation with Prokka, and specify organism for AMRFinder+
 # Remember to change (-g), (-m) and (-o) to match your organism, here we use Haemophilus influenzae as an example
 
-mostar -n ont_read.fastq.gz -1 read1.fastq.gz -2 read2.fastq.gz -g 2.1m -o Output -p Haemophilus_influenzae -a L42023.1.gb -p Haemophilus_influenzae -k ./emu_db -m r1041_e82_400bps_sup_v5.2.0
+mostar -n ont_read.fastq.gz -1 read1.fastq.gz -2 read2.fastq.gz -g 2.1m -o Output -a L42023.1.gb -p Haemophilus_influenzae -k ./emu_db -m r1041_e82_400bps_sup_v5.2.0
 
 # To run the pipeline in ONT-only mode, just omit read1/read2. 
+# ONT-only mode:
+mostar -n ont.fq.gz -g [size] -o [dir] 
+  
 </pre>
 
 ### Output files
@@ -151,4 +151,4 @@ A. This is a known issue stemming from blastn
 [![GitHub](https://img.shields.io/badge/GitHub-nermze-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/nermze)
 
 Developed and maintained by **Nermin Zecic** ([@nermze](https://github.com/nermze)). 
-For questions, bugs, or feature requests, please open an [Issue](https://github.com/nermze/HyPol-ASM/issues).
+For questions, bugs, or feature requests, please open an [Issue](https://github.com/nermze/mostar/issues).

@@ -1,19 +1,100 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 authors: 
-- family-names: "Zecic"
-  given-names: "Nermin"
-  orcid: "https://orcid.org/0009-0008-0687-424X"
-- family-names: "Skaare"
-  given-names: "Dagfinn"
-  orcid: "https://orcid.org/0009-0009-4084-4156"
-- family-names: "Johannessen Wefring"
-  given-names: "Helene"
-  orcid: "https://orcid.org/0000-0002-1743-5321"
-- family-names: "Taksdal Stubhaug"
-  given-names: "Tore"
-  orcid: "https://orcid.org/0000-0002-9234-7532"
-title: "MOSTAR-ASM: A Streamlined Hybrid Assembly and Polishing Pipeline"
+  - family-names: "Zecic"
+    given-names: "Nermin"
+    orcid: "https://orcid.org/0009-0008-0687-424X"
+  - family-names: "Skaare"
+    given-names: "Dagfinn"
+    orcid: "https://orcid.org/0009-0009-4084-4156"
+  - family-names: "Johannessen Wefring"
+    given-names: "Helene"
+    orcid: "https://orcid.org/0000-0002-1743-5321"
+  - family-names: "Taksdal Stubhaug"
+    given-names: "Tore"
+    orcid: "https://orcid.org/0000-0002-9234-7532"
+title: "MOSTAR: Modular ONT-Short-read Taxonomic Assembly and Resistance pipeline"
 version: 1.0.0
 date-released: 2026-02-05
-url: "https://github.com/YourUsername/HyPol-ASM"
+url: "https://github.com/nermze/MOSTAR-ASM"
+
+references:
+  - type: article
+    authors:
+      - family-names: Kolmogorov
+        given-names: Mikhail
+    title: "Assembly of long, error-prone reads using repeat graphs"
+    journal: "Nature Biotechnology"
+    year: 2019
+    doi: 10.1038/s41587-019-0072-8
+  - type: article
+    authors:
+      - family-names: Curry
+        given-names: Kristen D.
+    title: "Emu: species-level microbial community profiling of full-length 16S rRNA marker gene amplicon sequences"
+    journal: "Nature Methods"
+    year: 2022
+    doi: 10.1038/s41592-022-01520-4
+  - type: article
+    authors:
+      - family-names: Schwengers
+        given-names: Oliver
+    title: "Bakta: rapid and standardized annotation of bacterial genomes via alignment-free sequence identification"
+    journal: "Microbial Genomics"
+    year: 2021
+    doi: 10.1099/mgen.0.000685
+  - type: article
+    authors:
+      - family-names: Feldgarden
+        given-names: Michael
+    title: "Validating the NCBI AMRFinderPlus tool and resistance gene database using diverse bacterial genomes"
+    journal: "Scientific Reports"
+    year: 2021
+    doi: 10.1038/s41598-021-91456-0
+  - type: article
+    authors:
+      - family-names: Wood
+        given-names: Derrick E.
+    title: "Improved metagenomic analysis with Kraken 2"
+    journal: "Genome Biology"
+    year: 2019
+    doi: 10.1186/s13059-019-1891-0
+  - type: article
+    authors:
+      - family-names: Wick
+        given-names: Ryan R.
+      - family-names: Holt
+        given-names: Kathryn E.
+    title: "Polypolish: Short-read polishing of long-read bacterial genome assemblies"
+    journal: "PLOS Computational Biology"
+    year: 2022
+    doi: 10.1371/journal.pcbi.1009802
+  - type: article
+    authors:
+      - family-names: Chen
+        given-names: Shifu
+    title: "fastp: an ultra-fast all-in-one FASTQ pre-processor"
+    journal: "Bioinformatics"
+    year: 2018
+    doi: 10.1093/bioinformatics/bty560
+  - type: article
+    authors:
+      - family-names: Danecek
+        given-names: Petr
+    title: "Twelve years of SAMtools and BCFtools"
+    journal: "GigaScience"
+    year: 2021
+    doi: 10.1093/gigascience/giab008
+  - type: software
+    authors:
+      - family-names: Wick
+        given-names: Ryan R.
+    title: "Filtlong"
+    url: "https://github.com/rrwick/Filtlong"
+    year: 2017
+  - type: software
+    authors:
+      - name: "Oxford Nanopore Technologies"
+    title: "Medaka"
+    url: "https://github.com/nanoporetech/medaka"
+    year: 2018

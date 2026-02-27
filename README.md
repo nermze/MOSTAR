@@ -7,52 +7,60 @@
 # MOSTAR-Pipeline
 
 ### Modular ONT-Short-read Taxonomic Assembly and Resistance pipeline
-MOSTAR is a comprehensive bioinformatics pipeline designed to bridge the gap between long-read structural continuity and short-read base-pair accuracy. By integrating Oxford Nanopore Technologies (ONT) with Illumina sequencing, the pipeline reconstructs highly polished bacterial genomes. It performs hybrid and long-read assemblies, polishing, functional annotation, AMR profiling, and taxonomic classification — with built-in quality controls and an interactive HTML report. However, if short-reads are omitted, the pipeline will auto-switch to ONT-only mode. The pipeline will work with any bacteria, as long as the genome size and correct ONT model are specified. 
+MOSTAR is a comprehensive bioinformatics pipeline designed to bridge the gap between long-read structural continuity and short-read base-pair accuracy. The name Mostar is inspired by a historic old bridge. 
+
+The pipeline can run both in hybrid-mode, as well as ONT-only; the optimal mode is automatically selected based on user-input. 
+
+By integrating Oxford Nanopore Technologies (ONT) with Illumina sequencing, the pipeline reconstructs highly polished bacterial genomes. It performs hybrid and long-read assemblies, polishing, functional annotation, AMR profiling, and taxonomic classification — with built-in quality controls and an interactive HTML report. However, if short-reads are omitted, the pipeline will auto-switch to ONT-only mode. The pipeline will work with any bacteria, as long as the correct genome size and ONT model are specified.  
 
 Note: Some settings are hard-coded in the initial release of the pipeline, but several of the included tools can be fine-tuned by passing optional arguments. 
 
-[![ONT]
-
 ### ONT-only mode:
 1. Long-read quality trimming: Filtlong 
-2. De-novo assembly with Flye
-3. Long-read consensus correction with Medaka
+2. De-novo assembly: Flye
+3. Long-read consensus correction: Medaka
 4. Taxonomic profiling: EMU &/or Kraken2 
 6. Functional annotation: BAKTA 
-7. AMR: NCBI AMRFinder+ resistance profile 
+7. AMR: NCBI AMRFinder+ 
 8. Report: Complete report in HTML-format
 
-### Hybrid mode - In addition to the stepps above, the pipeline will also include
+### Hybrid mode - In addition to the stepps above, the pipeline can also include
 1. Short-read quality trimming: FastP for adapter & QC trimming
-2. Polishing: Polypolish for hybrid polishing using supplied short-reads
+2. Mapping short reads to conesensus: BWA 
+3. Polishing: Polypolish for hybrid polishing using supplied short-reads
 
 ### Html-report
-The provided report will display as
-1. Kraken2 - species ID
-2. EMU Taxonmy
-3. EMU Abundance 
-4. Assembly Quality Metrics 
+The provided report will display the most usefull statistics, depending on run mode.
+1. Run parameters - Time & date, sample name, as well as total runtime
+2. Kraken2 - species ID
+3. EMU Taxonmy
+4. EMU Abundance 
+5. Assembly Quality Metrics
+6. Circular Genome visualization including AMR-genes and direction
+7. Table containing detailed AMR report
+8. Software information
 
 ### Requirements and input files
 <pre>
 # In its simplest form, MOSTAR requires only 
 1. ONT-reads 
-2. Illumina paired end reads (R1/R2) (Optional)
-3. Correct model (Very important!) (Default: r1041_e82_400bps_sup_v5.2.0)
+2  Expected genome size 
+3. Correct model (Default: r1041_e82_400bps_sup_v5.2.0)
 4. Output folder 
 
-# Hybrid mode: 
-mostar -n ont.fq.gz -g [size] -o [dir]  -1 R1.fq -2 R2.fq
+# Run Mostar in Hybrid mode: 
+mostar --ont ont.fq.gz -g [size] -o [dir]  --r1 R1.fq --r2 R2.fq
 
 # Include Kraken2 & EMU taxonomy, annotation with Bakta, and specify organism for AMRFinder+ (if supported, otherwise leave empty)
-# Remember to change (-g), (-m) and (-o) to match your organism, here we use Haemophilus influenzae as an example.
+# Remember to change (--genome-size), (--model) and (--organism), this will tailor the algortihm to your data. 
+# Example using Haemophilus influenzae
 
-mostar --ont ont_read.fastq.gz --r1 read1.fastq.gz --r2 read2.fastq.gz -g 2.1m --output Output -a L42023.1.gb -p Haemophilus_influenzae --emu-db ./emu_db -m r1041_e82_400bps_sup_v5.2.0 
+mostar --ont ont_read.fastq.gz --r1 read1.fastq.gz --r2 read2.fastq.gz -g 2.1m --output Output -a L42023.1.gb --organism Haemophilus_influenzae --emu-db ./emu_db -m r1041_e82_400bps_sup_v5.2.0 
 
 # To run the pipeline in ONT-only mode, just omit read1/read2. 
 # ONT-only mode:
-mostar -n ont.fq.gz -g [size] -o [dir] 
-  
+mostar --ont ont.fq.gz --genome-size [size] -output [dir] 
+
 </pre>
 
 ### Output files
@@ -168,6 +176,9 @@ A: You have to specify the correct expected genome size (--genome-size) and mode
 
 Q: My assembly is still failing
 A: Your input data might be too low quailty. Try reducing --filtlong-cov.  
+
+Q: Where are my plasmids?
+A Try running with --meta 
 
 Q: Im getting an index-error during assembly with Flye
 A: You are using the same output folder from a previous run. Please specify a new output folder with (--output), or rename/move/delete the old one. 

@@ -7,13 +7,18 @@
 # MOSTAR-Pipeline
 
 ### Modular ONT-Short-read Taxonomic Assembly and Resistance pipeline
-MOSTAR is a comprehensive bioinformatics pipeline designed to bridge the gap between long-read structural continuity and short-read base-pair accuracy. The name Mostar is inspired by a historic old bridge. 
+MOSTAR is a comprehensive bioinformatics pipeline designed to bridge the gap between long-read structural continuity and short-read base-pair accuracy. The name Mostar is inspired by the historic Stari Most (Old Bridge) of Mostar, a symbol of connection and cultural resilience. 
 
-The pipeline can run both in hybrid-mode, as well as ONT-only; the optimal mode is automatically selected based on user-input. 
+By integrating Oxford Nanopore Technologies (ONT) with Illumina sequencing, the pipeline reconstructs highly polished bacterial genomes. It performs hybrid and long-read assemblies, polishing, functional annotation, AMR profiling, and taxonomic classification — with built-in quality controls and an interactive HTML report. The pipeline will work with any bacteria, as long as the correct genome size and ONT model are specified. The pipeline can run both in hybrid-mode, as well as ONT-only; the optimal mode is automatically selected based on user-input. 
 
-By integrating Oxford Nanopore Technologies (ONT) with Illumina sequencing, the pipeline reconstructs highly polished bacterial genomes. It performs hybrid and long-read assemblies, polishing, functional annotation, AMR profiling, and taxonomic classification — with built-in quality controls and an interactive HTML report. However, if short-reads are omitted, the pipeline will auto-switch to ONT-only mode. The pipeline will work with any bacteria, as long as the correct genome size and ONT model are specified.  
+Note: Some settings are hard-coded in the initial release, however several of the key arguemnts are available to fine-tune the pipeline (see below). 
 
-Note: Some settings are hard-coded in the initial release of the pipeline, but several of the included tools can be fine-tuned by passing optional arguments. 
+### Interactive HTML-report
+<p align="center">
+  <img src="assets/Circular_genome_visual_multiple_contigs.png" 
+       width="100%" alt="Circular Genome Visualization">
+</p>
+</p>
 
 ### ONT-only mode:
 1. Long-read quality trimming: Filtlong 

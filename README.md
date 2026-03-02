@@ -13,12 +13,33 @@ By integrating Oxford Nanopore Technologies (ONT) with Illumina sequencing, the 
 
 Note: Some settings are hard-coded in the initial release, however several of the key arguemnts are available to fine-tune the pipeline (see below). 
 
-### Interactive HTML-report
+# Interactive HTML-report
+
+### QC-Metrics for assembly
+<p align="center">
+  <img src="assets/Assembly_qc_metrics.png" 
+       width="100%" alt="QC-Metrics">
+</p>
+</p>
+
+### Circular Genome visualization including interactive zoom
 <p align="center">
   <img src="assets/Circular_genome_visual_multiple_contigs.png" 
        width="100%" alt="Circular Genome Visualization">
 </p>
 </p>
+
+### AMR+ Summary Table
+### Circular Genome visualization including interactive zoom
+<p align="center">
+  <img src="assets/AMR_Summary_table.png" 
+       width="100%" alt="AMR summary table">
+</p>
+</p>
+
+
+
+
 
 ### ONT-only mode:
 1. Long-read quality trimming: Filtlong 

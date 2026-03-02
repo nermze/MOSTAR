@@ -30,7 +30,6 @@ Note: Some settings are hard-coded in the initial release, however several of th
 </p>
 
 ### AMR+ Summary Table
-### Circular Genome visualization including interactive zoom
 <p align="center">
   <img src="assets/AMR_Summary_table.png" 
        width="100%" alt="AMR summary table">

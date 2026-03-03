@@ -1,19 +1,20 @@
+# MOSTAR - Modular ONT-Short-read Taxonomic Assembly and Resistance pipeline
 <p align="center">
   <img src="assets/Mostar.jpg" 
        width="100%" alt="MOSTAR-ASM Banner">
 </p>
-</p>
 
-# MOSTAR-Pipeline
-
-### Modular ONT-Short-read Taxonomic Assembly and Resistance pipeline
-MOSTAR is a comprehensive bioinformatics pipeline designed to bridge the gap between long-read structural continuity and short-read base-pair accuracy. The name Mostar is inspired by the historic Stari Most (Old Bridge) of Mostar, a symbol of connection and cultural resilience. 
-
-By integrating Oxford Nanopore Technologies (ONT) with Illumina sequencing, the pipeline reconstructs highly polished bacterial genomes. It performs hybrid and long-read assemblies, polishing, functional annotation, AMR profiling, and taxonomic classification — with built-in quality controls and an interactive HTML report. The pipeline will work with any bacteria, as long as the correct genome size and ONT model are specified. The pipeline can run both in hybrid-mode, as well as ONT-only; the optimal mode is automatically selected based on user-input. 
+### 
+MOSTAR is a comprehensive bioinformatics pipeline designed to bridge the gap between long-read structural continuity and short-read base-pair accuracy. The name Mostar is inspired by the historic Stari Most (Old Bridge) of Mostar, a symbol of connection and cultural resilience. By integrating Oxford Nanopore Technologies (ONT) with Illumina sequencing, the pipeline reconstructs highly polished bacterial genomes. It performs hybrid and long-read assemblies, polishing, functional annotation, AMR profiling, and taxonomic classification — with built-in quality controls and an interactive HTML report. The pipeline has been developed and tested with and without short reads on *S. aureus*, *B. fragilis*, as well as *H. influenzae* strains, but will work with any bacteria, as long as the correct genome size and ONT model are specified. The pipeline can run both in hybrid-mode, as well as ONT-only; the optimal mode is automatically selected based on user-input. 
 
 Note: Some settings are hard-coded in the initial release, however several of the key arguemnts are available to fine-tune the pipeline (see below). 
 
-# Interactive HTML-report
+# Interactive HTML-report 
+### Species ID and QC-metrics for assembly
+<p align="center">
+  <img src="assets/Main_run_report.png" 
+       width="100%" alt="QC-Metrics">
+</p>
 
 ### QC-Metrics for assembly
 <p align="center">

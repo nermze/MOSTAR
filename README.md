@@ -12,7 +12,7 @@ Note: Some settings are hard-coded in the initial release, however several of th
 # Interactive HTML-report 
 ### Species ID and QC-metrics for assembly
 <p align="center">
-  <img src="assets/Main_run_report.png" 
+  <img src="assets/Main_report.png" 
        width="100%" alt="QC-Metrics">
 </p>
 

@@ -191,7 +191,7 @@ conda config --env --set subdir osx-64
 | `--emu-db` | EMU | Requires EMU database path, auto-download [16s Amplicon classifier] |
 | Other | |
 | `--cleanup` | Cleanup | Delete intermediate files |
-| `--threads` | Cleanup | Select number of threads |
+| `--threads` | Threads | Select number of threads |
 | `--help/-h` | Help | Show help menu|
 
 

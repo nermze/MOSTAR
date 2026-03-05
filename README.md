@@ -11,34 +11,27 @@ Note: Some settings are hard-coded in the initial release, however several of th
 
 # Interactive HTML-report 
 ### Species ID and QC-metrics for assembly
+On a successfull run, the output folder will contain a HTML-report. The report features key run-metrics, including assembly statistics and number of contigs. The report will adapt to user input, as some of the tools like taxonomy and short-reads polishing are optional.  
+
 <p align="center">
   <img src="assets/Main_report.png" 
        width="100%" alt="QC-Metrics">
 </p>
 
-### QC-Metrics for assembly
-<p align="center">
-  <img src="assets/Assembly_qc_metrics.png" 
-       width="100%" alt="QC-Metrics">
-</p>
-</p>
-
-### Circular Genome visualization including interactive zoom
+### Circular Genome visualization
+The report will also draw interactive genome maps, with automatic zoom, in addition to AMR-gene locations, direction, and GC-content. 
 <p align="center">
   <img src="assets/Circular_genome_visual_multiple_contigs.png" 
        width="100%" alt="Circular Genome Visualization">
 </p>
-</p>
 
 ### AMR+ Summary Table
+Finnaly the report willl also feature a detailed AMR table, in addition to all included software.  
 <p align="center">
   <img src="assets/AMR_Summary_table.png" 
        width="100%" alt="AMR summary table">
 </p>
 </p>
-
-
-
 
 
 ### ONT-only mode:
@@ -75,7 +68,7 @@ The provided report will display the most usefull statistics, depending on run m
 4. Output folder 
 
 # Run Mostar in Hybrid mode: 
-mostar --ont ont.fq.gz -g [size] -o [dir]  --r1 R1.fq --r2 R2.fq
+mostar --ont ont.fq.gz --genome-size [size] --output [dir]  --r1 R1.fq --r2 R2.fq
 
 # Include Kraken2 & EMU taxonomy, annotation with Bakta, and specify organism for AMRFinder+ (if supported, otherwise leave empty)
 # Remember to change (--genome-size), (--model) and (--organism), this will tailor the algortihm to your data. 
@@ -85,7 +78,7 @@ mostar --ont ont_read.fastq.gz --r1 read1.fastq.gz --r2 read2.fastq.gz -g 2.1m -
 
 # To run the pipeline in ONT-only mode, just omit read1/read2. 
 # ONT-only mode:
-mostar --ont ont.fq.gz --genome-size [size] -output [dir] 
+mostar --ont ont.fq.gz --genome-size [size] --output [dir] 
 
 </pre>
 
@@ -121,7 +114,7 @@ A successfull run wil contain the following, including the final polished fasta 
 12. EMU
 </pre>  
 
-# Installation (Conda or Mamba)
+# Installation (Conda)
 <pre>
 # Clone the repository:
 git clone https://github.com/nermze/MOSTAR.git
@@ -197,14 +190,14 @@ conda config --env --set subdir osx-64
 
 
 # Troubleshooting and known issues
-Q: My assembly is poor
-A: You have to specify the correct expected genome size (--genome-size) and model example r1041.XX (--model)
+Q: Poor or fragmentet assembly
+A: Make sure to specify the correct expected genome size (--genome-size) and model (--model) example r1041.XX
 
 Q: My assembly is still failing
 A: Your input data might be too low quailty. Try reducing --filtlong-cov.  
 
 Q: Where are my plasmids?
-A Try running with --meta 
+A: Try running the pipeline with (--meta) 
 
 Q: Im getting an index-error during assembly with Flye
 A: You are using the same output folder from a previous run. Please specify a new output folder with (--output), or rename/move/delete the old one. 

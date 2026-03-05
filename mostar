@@ -4,6 +4,15 @@ trap 'echo "[ERROR] Pipeline failed at line $LINENO"; exit 1' ERR
 START_TIME=$(date +%s)
 
 VERSION="1.0.0"
+OUTDIR=""
+FINAL_ASM=""
+START_TIME=$(date +%s)
+TOTAL_LEN=0
+N50_VAL=0
+CONTIG_CNT=0
+TOP_TAXID="N/A"
+TOP_ABUNDANCE="0.00"
+ASM_SPECIES_FULL="Unknown"
 
 
 # MOSTAR is a comprehensive bioinformatics pipeline for proceccsing ONT-reads.
@@ -35,399 +44,319 @@ usage() {
     echo "ONT-only: mostar -n ont.fq.gz -g [size] -o [dir] -p [Organism]"
     echo ""
     echo "Required:"
-    echo "  --ont           ONT Long reads (.fastq.gz)"
-    echo "  --genome-size   Genome size (e.g., 2.1m, 5.0m, 4g)"
+    echo "  --ont           ONT Long reads [.fastq.gz]"
+    echo "  --genome-size   Genome size [e.g., 2.1m, 5.0m, 4g]"
     echo "  --output        Output directory"
-    echo "  --medaka        Medaka model (Default: r1041_e82_400bps_sup_v5.2.0)"
+    echo "  --model        Medaka model [Default: r1041_e82_400bps_sup_v5.2.0]"
     echo ""
     echo "Options:"
-    echo "  --r1/--r2       Illumina R1/R2 (Enables Hybrid mode)"
-    echo "  --organism      Organism for AMRFinder+ (e.g., Escherichia, Staphylococcus)"
-    echo "  --filtlong-cov  Filtlong target coverage (Default: 100)"
+    echo "  --r1/--r2       Illumina R1/R2 [Enables Hybrid mode]"
+    echo "  --organism      Organism for AMRFinder+ [e.g., Escherichia, Staphylococcus]"
+    echo "  --filtlong-cov  Filtlong target coverage [Default: 100]"
+    echo "  --meta          Enbale uneven coverage mode for Flye [Default: disabled]"
     echo ""
     echo "Annotation options:"
     echo "  --bakta-db      BAKTA database path, enables annotation"
-    echo "  --bakta-ref     BAKTA annotation reference (GFF)"
+    echo "  --bakta-ref     BAKTA annotation reference [GFF]"
     echo "  --complete      BAKTA enable if all sequences are complete (circular) [Default: disabled]"
     echo ""
     echo "Classification options:"
     echo "  --kraken-db     Requires pre-built Kraken2 database"
-    echo "  --confidence    Kraken2 confidence threshold (Default: 0.1)"
-    echo "  --emu-db        Requires EMU database path, will auto-download (16s Amplicon classifier)"
+    echo "  --confidence    Kraken2 confidence threshold [Default: 0.1]"
+    echo "  --emu-db        Requires EMU database path, will auto-download [16s Amplicon classifier]"
     echo ""
     echo "Other options:"
     echo "  --cleanup       Cleanup intermediate files"
-    echo "  --threads       CPU threads (Default: 10)"
+    echo "  --threads       CPU threads [Default: 10]"
+    echo "  --help          Show this help message and exit"
     echo ""
     echo MOSTAR v1.0.0
     exit 1
 }
 
-# Generate a HTML-report 
 generate_html_report() {
-    local HTML_OUT="$OUTDIR/MOSTAR_Final_Report.html"
-    local AMR_FILE="$OUTDIR/amr_results/AMR_Report.tsv"
-    local EMU_REPORT="$OUTDIR/taxonomy/emu_results_rel-abundance.tsv"
-    local TOP_TAXID="N/A"
-    local TOP_ABUNDANCE="0.00"
-    local END_TIME=$(date +%s)
-    local DURATION=$(( (END_TIME - START_TIME) / 60 ))
+    # Initialize local variables
+    local OD="${OUTDIR:-.}"
+    local FA="${FINAL_ASM:-}"
+    local ONT_VAL="${ONT:-sample}"
+    local AMR_FILE="$OD/amr_results/AMR_Report.tsv"
+    local HTML_OUT="$OD/MOSTAR_Final_Report.html"
+    local MAP_DIR="$OD/amr_results/maps"  
+    local REPORT_SAMPLE; REPORT_SAMPLE=$(basename "$ONT_VAL")
+    local REPORT_DATE; REPORT_DATE=$(date '+%Y-%m-%d %H:%M:%S')
+    local DURATION; DURATION=$(( ($(date +%s) - ${START_TIME:-0}) / 60 ))
+    local TAXID_DISPLAY="<span style='color:#95a5a6;'>Not run</span>"
+    local POS_CHANGED=0
+    local HYBRID_CARDS=""
+    local METRICS_BLOCKS=""
+    local TAX_CARDS=""
+    local TOTAL_LEN=0
+    local N50_VAL=0
+    local CONTIG_CNT=0
+    local FLYE_V=$(flye --version 2>/dev/null || echo "N/A")
+    local MEDAKA_V=$(medaka --version 2>/dev/null | head -n 1 || echo "N/A")
+    local AMRF_V=$(amrfinder --version 2>/dev/null || echo "N/A")
+    local BAKTA_V=$(bakta --version 2>/dev/null || echo "N/A")
+    local KRAKEN_V=$(kraken2 --version 2>/dev/null | head -n 1 | awk '{print $NF}' || echo "N/A")
+    local FASTP_V=$(fastp --version 2>&1 | awk '{print $NF}' || echo "N/A")
+    local BWA_V=$(bwa 2>&1 | grep "Version:" | awk '{print $NF}' || echo "N/A")
+    local FILT_V=$(filtlong --version 2>/dev/null || echo "N/A")
+    local POLY_V=$(polypolish --version 2>/dev/null || echo "N/A")
+    local EMU_V="$(emu --version 2>/dev/null || echo "N/A")"
 
-    # Extract top taxid and abundance from EMU report
-    if [[ -s "$EMU_REPORT" ]]; then
-        local RAW_DATA
-        RAW_DATA=$(LC_NUMERIC=C awk -F'\t' "NR==2 {printf \"%s|%.2f\", \$1, \$2*100}" "$EMU_REPORT" || echo "N/A|0.00")
-        TOP_TAXID=$(echo "$RAW_DATA" | cut -d'|' -f1)
-        TOP_ABUNDANCE=$(echo "$RAW_DATA" | cut -d'|' -f2)
+    # Assembly Metrics from the final polished File
+    if [[ -f "$FA" ]]; then
+        TOTAL_LEN=$(grep -v "^>" "$FA" | tr -d '[:space:]' | wc -c)
+        N50_VAL=$TOTAL_LEN
+        CONTIG_CNT=$(grep -c "^>" "$FA")
+        
+        # Calculate Polished Bases if Medaka baseline exists (MEDAKA_LEN=$M_LEN)
+        if [[ -n "${MEDAKA_LEN:-}" && "$MEDAKA_LEN" -gt 0 ]]; then
+            local DIFF=$(( TOTAL_LEN - MEDAKA_LEN ))
+            POS_CHANGED=${DIFF#-}
+        fi
     fi
 
-    [[ -z "$TOP_ABUNDANCE" ]] && TOP_ABUNDANCE="0.00"
-    [[ -z "$TOP_TAXID" ]] && TOP_TAXID="N/A"
+    # Taxonomy Cards & Display Logic 
+    if [[ -n "${ASM_SPECIES_FULL:-}" && "$ASM_SPECIES_FULL" != "Unknown" ]]; then
+        TAX_CARDS+="<div class='qc-card'><span class='qc-label'>Kraken2 Species ID</span><span class='qc-val'>$ASM_SPECIES_FULL</span></div>"
+    fi
 
-    # TaxID display (link or N/A)
-    local TAXID_DISPLAY
-    if [[ "$TOP_TAXID" != "N/A" ]]; then
-        TAXID_DISPLAY="<a href='https://www.ncbi.nlm.nih.gov/datasets/taxonomy/tree/?taxon=${TOP_TAXID}'
-           target='_blank' style='color:var(--accent); text-decoration:none; border-bottom:1px dashed var(--accent);'>
-           ${TOP_TAXID} &#128279;</a>"
+    if [[ "${TOP_TAXID:-N/A}" != "N/A" ]]; then
+        TAXID_DISPLAY="<a href='https://www.ncbi.nlm.nih.gov/datasets/taxonomy/tree/?taxon=${TOP_TAXID}' target='_blank' style='color:#3498db; text-decoration:none;'>${TOP_TAXID} &#128279;</a>"
+        TAX_CARDS+="<div class='qc-card'><span class='qc-label'>EMU TAXONOMY</span><span class='qc-val'>$TAXID_DISPLAY</span></div>"
+        if [[ -n "${TOP_ABUNDANCE:-}" ]]; then
+            TAX_CARDS+="<div class='qc-card'><span class='qc-label'>ABUNDANCE</span><span class='qc-val'>${TOP_ABUNDANCE}%</span></div>"
+        fi
+    fi
+
+    # Hybrid Metrics
+    if [[ -n "${R1:-}" ]]; then
+        local CLEAN_DEPTH="${MEAN_DEPTH//x/}" 
+        local POL_DISP; POL_DISP=$(printf "%'d" "${POS_CHANGED:-0}")
+        local GAP_DISP; GAP_DISP=$(printf "%'d" "${ZERO_DEPTH_BP:-0}")
+        
+        HYBRID_CARDS="
+        <div class='qc-card'><span class='qc-label'>Short-Read Depth</span><span class='qc-val'>${CLEAN_DEPTH}x</span></div>
+        <div class='qc-card'><span class='qc-label'>Polished Bases</span><span class='qc-val'>$POL_DISP bp</span></div>
+        <div class='qc-card'><span class='qc-label'>Zero-Depth Gaps</span><span class='qc-val' style='color:${ZERO_DEPTH_BP:+#e74c3c}'>$GAP_DISP bp</span></div>"
+    fi
+
+    if [[ -n "${R1:-}" ]]; then
+        # HYBRID MODE
+        METRICS_BLOCK="<div class='card'>
+            <h2>Assembly Metrics Comparison</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th style='width: 35%; padding-left: 0;'>Metric</th>
+                        <th style='color: #7f8c8d;'>Medaka (ONT)</th>
+                        <th style='color: var(--accent);'>Final (Polished)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>Total Genome Length</td><td>$(printf "%'d" ${MEDAKA_LEN:-0}) bp</td><td class='val-new'>$(printf "%'d" ${FINAL_LEN:-0}) bp</td></tr>
+                    <tr><td>Contig Count</td><td>${MEDAKA_CNT:-0}</td><td class='val-new'>${FINAL_CNT:-0}</td></tr>
+                    <tr><td>Assembly N50</td><td>$(printf "%'d" ${MEDAKA_N50:-0}) bp</td><td class='val-new'>$(printf "%'d" ${FINAL_N50:-0}) bp</td></tr>
+                </tbody>
+            </table>
+            <p style='font-size: 0.8rem; color: #7f8c8d; margin-top: 10px;'>* Short-read polishing resulted in a net change of <b>$(printf "%'d" ${POS_CHANGED:-0})</b> positions.</p>
+        </div>"
     else
-        TAXID_DISPLAY="<span style='color:#95a5a6;'>N/A</span>"
-    fi
-
-    # Taxonomic classification cards (Kraken2 if available)
-    local KRAKEN_CARDS=""
-    if [[ "$RUN_KRAKEN2" == true ]]; then
-        KRAKEN_CARDS="
-        <div class='qc-card'>
-            <span class='qc-label'>Kraken2 Species</span>
-            <span class='qc-val'>${K2_SPECIES:-N/A}</span>
-        </div>
-        <div class='qc-card'>
-            <span class='qc-label'>Kraken2 Confidence</span>
-            <span class='qc-val'>${K2_ABUNDANCE:-0.00}%</span>
+        # ONT-ONLY MODE
+        METRICS_BLOCK="<div class='card'>
+            <h2>Assembly Metrics (ONT-Only)</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th style='width: 50%; padding-left: 0;'>Metric</th>
+                        <th style='color: var(--accent);'>Results</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>Total Genome Length</td><td class='val-new'>$(printf "%'d" ${FINAL_LEN:-0}) bp</td></tr>
+                    <tr><td>Contig Count</td><td class='val-new'>${FINAL_CNT:-0}</td></tr>
+                    <tr><td>Assembly N50</td><td class='val-new'>$(printf "%'d" ${FINAL_N50:-0}) bp</td></tr>
+                </tbody>
+            </table>
         </div>"
     fi
 
-    # Assembly table header — 3-column if hybrid, 2-column if ONT-only
-    local TABLE_HEADER
-    local COL_WIDTHS_ASSEMBLY
-    if [[ -n "${R1:-}" ]]; then
-        TABLE_HEADER="<tr><th>Metric</th><th>Initial (ONT)</th><th>Final (Hybrid)</th></tr>"
-        COL_WIDTHS_ASSEMBLY="<col style='width:40%'><col style='width:30%'><col style='width:30%'>"
-    else
-        TABLE_HEADER="<tr><th>Metric</th><th>Assembly Stats</th></tr>"
-        COL_WIDTHS_ASSEMBLY="<col style='width:40%'><col style='width:60%'>"
+
+    # Map Gallery with Base64 & Zoom
+    local MAP_CONTENT=""
+    if [[ -d "$MAP_DIR" ]]; then
+        for img in "$MAP_DIR"/*.png; do
+            if [[ -f "$img" ]]; then
+                local b64; b64=$(base64 < "$img" | tr -d '\n')
+                local label; label=$(basename "$img" .png | sed 's/_/ /g')
+                MAP_CONTENT+="<div class='map-card'><h4>$label</h4><div class='map-zoom-container'><img src='data:image/png;base64,$b64' alt='$label'></div><p style='font-size:0.7rem; color:#95a5a6; margin-top:5px;'>Hover to zoom</p></div>"
+            fi
+        done
     fi
 
-    # Assembly table rows
-    get_row() {
-        local LABEL=$1 OLD=$2 NEW=$3
-        if [[ -n "${R1:-}" ]]; then
-            echo "<tr><td class='metric-name'>$LABEL</td><td>${OLD}</td><td class='val-new'>${NEW}</td></tr>"
-        else
-            echo "<tr><td class='metric-name'>$LABEL</td><td class='val-new'>${OLD}</td></tr>"
-        fi
-    }
-    local ROW_LEN ROW_CNT ROW_N50
-    ROW_LEN=$(get_row "Total Genome Length" "${M_LEN:-0} bp"     "${TOTAL_LEN:-0} bp")
-    ROW_CNT=$(get_row "Contig Count"        "${M_CNT:-0}"        "${CONTIG_CNT:-0}")
-    ROW_N50=$(get_row "N50 Score"           "${M_N50:-0} bp"     "${TOTAL_LEN:-0} bp")
+    local PYTHON_SUMMARY=""
+    [[ -f "$OD/amr_summary.html" ]] && PYTHON_SUMMARY=$(cat "$OD/amr_summary.html")
 
-    # Hybrid-only QC cards
-    local HYBRID_METRICS=""
-    if [[ -n "${R1:-}" ]]; then
-        local GAP_CLASS=""
-        [[ "${ZERO_DEPTH_BP:-0}" != "0" ]] && GAP_CLASS="gap-alert"
-        HYBRID_METRICS="
-        <div class='qc-card'><span class='qc-label'>Short-Read Depth</span><span class='qccatval'>${MEAN_DEPTH:-0}x</span></div>
-        <div class='qc-card'><span class='qc-label'>Polished Bases</span><span class='qc-val'>${POS_CHANGED:-0} bp</span></div>
-        <div class='qc-card ${GAP_CLASS}'><span class='qc-label'>Zero-Depth Gaps</span><span class='qc-val'>${ZERO_DEPTH_BP:-0} bp</span></div>"
-    fi
-
-    # AMR table rows
-    if [[ -s "$AMR_FILE" ]]; then
-        AMR_ROWS=$(tail -n +2 "$AMR_FILE" | sort -t$'\t' -k17,17nr | awk -F'\t' '{
-            val = $17 + 0;
-            if (val >= 100) color="#27ae60";
-            else if (val >= 90) color="#3498db";
-            else color="#e67e22";
-            printf "<tr>"
-            printf "<td><span class=\"amr-tag\" style=\"background:%s15; color:%s; border-color:%s40;\">%s</span></td>", color, color, color, $6
-            printf "<td><small>%s</small></td>", $11
-            printf "<td><div class=\"identity-bar\">"
-            printf "<div class=\"identity-fill\" style=\"width:%.2f%%; background-color:%s;\"></div>", val, color
-            printf "<span style=\"color:%s; font-weight:bold;\">%.2f%%</span>", color, val
-            printf "</div></td>"
-            printf "</tr>\n"
-        }' | head -n 12)
-        else
-            AMR_ROWS="<tr><td colspan='3' style='text-align:center; padding:30px; color:#95a5a6;'>No resistance genes identified.</td></tr>"
-        fi
-
-
-    # Genome map 
-    # Genome map
-    local MAP_CONTENT
-
-    # Path to the genome map generated by the Python script
-    GENOME_MAP_PNG="$OUTDIR/amr_results/genome_map.png"
-
-        if [[ -f "$GENOME_MAP_PNG" && -s "$GENOME_MAP_PNG" ]]; then
-            PLOT_BASE64=$(base64 < "$GENOME_MAP_PNG" | tr -d '\n')
-            MAP_CONTENT="<img src='data:image/png;base64,${PLOT_BASE64}'
-                            style='width:100%; max-width:1200px; height:auto; display:block; margin:0 auto;'
-                            alt='NCBI AMRFinder+ Genome Map'>"
-        else
-            MAP_CONTENT="<p style='color:#95a5a6; padding:40px;'>Could not generate the map (check biopython/reportlab).</p>"
-        fi
-
-    VER_FLYE=$(flye --version 2>/dev/null || echo "not found")
-    VER_EMU=$(emu --version 2>/dev/null || echo "not found")
-    VER_POLY=$(polypolish --version 2>/dev/null || echo "not found")
-    VER_AMR=$(amrfinder --version 2>/dev/null || echo "not found")
-    VER_BWA=$(bwa 2>&1 | grep "Version" | cut -d' ' -f2 || echo "not found")
-    VER_MEDAKA=$(medaka --version 2>/dev/null || echo "not found")
-    VER_FILT=$(filtlong --version 2>/dev/null || echo "not found")
-    VER_BAKTA=$(bakta --version 2>/dev/null | head -n1 | cut -d' ' -f2 || echo "not found")
-    VER_FASTP=$(fastp --version 2>/dev/null | head -n1 || echo "not found")
-    VER_SAM=$(samtools --version 2>/dev/null | head -n1 | cut -d' ' -f2 || echo "not found")
-
-    # Write HTML
+    # Start Heredoc
     cat <<EOF > "$HTML_OUT"
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MOSTAR Run Report — $(basename "$ONT")</title>
 <style>
-    :root {
-        --primary: #1a2a3a;
-        --accent:  #3498db;
-        --green:   #27ae60;
-        --red:     #e74c3c;
-        --bg:      #f8f9fa;
-        --border:  #edf2f7;
-        --danger:  #e74c3c;
-    }
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background: var(--bg);
-        padding: 25px;
-        color: var(--primary);
-        line-height: 1.5;
-    }
-    .wrapper { max-width: 90vw; margin: auto; }
-
-    /* ── Header ── */
-    .header {
-        background: var(--primary);
-        color: white;
-        padding: 25px 30px;
-        border-radius: 12px;
-        margin-bottom: 20px;
-    }
-    .header h1 { font-size: 1.6rem; font-weight: 700; margin-bottom: 10px; }
-    .header p  { opacity: 0.85; font-size: 0.9rem; line-height: 1.8; }
-
-    /* ── QC Cards ── */
-    .qc-row {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-        gap: 15px;
-        margin-bottom: 20px;
-    }
-    .qc-card {
-        background: white;
-        padding: 20px;
-        border-radius: 12px;
-        border: 1px solid var(--border);
-        box-shadow: 0 2px 4px rgba(0,0,0,0.04);
-        text-align: center;
-    }
-    .qc-label { display: block; font-size: 0.68rem; color: #7f8c8d; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
-    .qc-val   { font-weight: 700; font-size: 1.2rem; }
-    .gap-alert { border-color: var(--danger); background: #fffafa; }
-    .gap-alert .qc-val { color: var(--danger); }
-
-    /* ── Cards ── */
-    .card {
-        background: white;
-        padding: 25px;
-        border-radius: 12px;
-        border: 1px solid var(--border);
-        margin-bottom: 20px;
-    }
-    .card h2 {
-        font-size: 1rem;
-        font-weight: 600;
-        border-bottom: 2px solid var(--bg);
-        padding-bottom: 10px;
-        margin-bottom: 18px;
-    }
-
-    /* ── Tables ── */
-    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-    th {
-        text-align: left;
-        font-size: 0.72rem;
-        color: #7f8c8d;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        border-bottom: 1px solid var(--border);
-        padding: 10px;
-    }
-    td {
-        padding: 12px 10px;
-        border-bottom: 1px solid var(--border);
-        font-size: 0.88rem;
-        word-wrap: break-word;
-        overflow-wrap: break-word;
-        vertical-align: middle;
-    }
-    tr:last-child td { border-bottom: none; }
-
-    .val-new     { font-weight: 700; color: var(--accent); }
-    .metric-name { color: #555; }
-
-    /* AMR Tags & Bars */
-    .amr-tag {
-        display: inline-block;
-        padding: 3px 8px;
-        border-radius: 5px;
-        border: 1px solid;
-        font-weight: 700;
-        font-size: 0.78rem;
-        white-space: nowrap;
-        font-family: monospace;
-    }
-    .identity-bar  { display: flex; align-items: center; gap: 10px; }
-    .identity-fill { height: 6px; border-radius: 3px; min-width: 4px; flex-shrink: 0; }
-
-    /* ── Genome Map ── */
-    .map-wrap { display: flex; justify-content: center; padding: 10px 0; }
-
-    /* ── Software Grid ── */
-    .software-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-        gap: 10px;
-        font-size: 0.8rem;
-    }
-    .soft-item {
-        background: #fdfdfd;
-        padding: 10px 12px;
-        border-radius: 8px;
-        border: 1px solid #f1f1f1;
-        word-break: break-all;
-    }
-    .soft-item b { display: block; margin-bottom: 2px; color: var(--primary); }
-
-    /* ── Footer ── */
-    .footer {
-        text-align: center;
-        margin-top: 30px;
-        padding-top: 20px;
-        border-top: 1px solid var(--border);
-        color: #95a5a6;
-        font-size: 0.82rem;
-    }
+    :root { --primary: #1a2a3a; --bg: #f8f9fa; --border: #edf2f7; --accent: #3498db; }
+    body { font-family: sans-serif; background: var(--bg); color: var(--primary); padding: 30px; line-height: 1.6; }
+    .card { background: white; padding: 25px; border-radius: 12px; border: 1px solid var(--border); margin-bottom: 25px; }
+    .qc-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 25px; }
+    .qc-card { background: white; padding: 15px; border-radius: 12px; border: 1px solid var(--border); text-align: center; }
+    .qc-label { display: block; font-size: 0.7rem; color: #7f8c8d; text-transform: uppercase; margin-bottom: 5px; font-weight: 600; }
+    .qc-val { font-weight: 700; font-size: 1.1rem; }
+    table { width: 100%; border-collapse: collapse; }
+    th { padding: 12px 0; border-bottom: 2px solid var(--border); text-align: left; font-size: 0.9rem; color: var(--primary); }
+    td { padding: 10px 0; border-bottom: 1px solid var(--border); text-align: left; }
+    .val-new { font-weight: bold; color: var(--accent); }
+    .map-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(600px, 1fr)); gap: 40px; justify-items: center; }
+    .map-card { text-align: center; background: white; border: 1px solid var(--border); padding: 20px; border-radius: 15px; width: 100%; }
+    .map-zoom-container { width: 100%; max-width: 100%; margin: 10px auto; overflow: hidden; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); background: white; position: relative; }
+    .map-zoom-container img { width: 100%; transition: transform 0.3s ease-out; cursor: zoom-in; transform-origin: center center; }
+    .map-zoom-container img:hover { transform: scale(2.5); cursor: zoom-out; } 
+    .legend-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin-top: 15px; }
+    .legend-item { display: flex; align-items: center; gap: 10px; font-size: 0.85rem; font-weight: 600; }
+    .swatch { width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0; border: 1px solid rgba(0,0,0,0.1); }
 </style>
 </head>
 <body>
-<div class="wrapper">
+    <div class="card" style="background:var(--primary); color:white;">
+        <h1 style="margin:0;">MOSTAR Run Report</h1>
+        <p style="margin:5px 0 0 0;"><b>Sample:</b> $REPORT_SAMPLE | <b>Date:</b> $REPORT_DATE | <b>Run Time:</b> $DURATION min</p>
+    </div>
 
-    <!-- Header -->
-    <div class="header">
-        <h1>MOSTAR <span style="font-weight:200;">Run Report</span></h1>
-        <p>
-            <b>Sample:</b> $(basename "$ONT")<br>
-            <b>Generated:</b> $(date '+%Y-%m-%d %H:%M:%S')<br>
-            <b>Run Time:</b> ${DURATION} minutes
+    <div class="qc-row">
+        $TAX_CARDS
+        $HYBRID_CARDS
+    </div>
+
+    <div class="card">
+        <h2>Assembly Metrics Comparison</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 40%;">Metric</th>
+                    <th style="color: #7f8c8d;">Medaka (ONT Only)</th>
+                    <th style="color: var(--accent);">Final (Polished)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Total Genome Length</td>
+                    <td>$(printf "%'d" ${MEDAKA_LEN:-0}) bp</td>
+                    <td class="val-new">$(printf "%'d" $TOTAL_LEN) bp</td>
+                </tr>
+                <tr>
+                    <td>Contig Count</td>
+                    <td>${MEDAKA_CNT:-$CONTIG_CNT}</td>
+                    <td class="val-new">$CONTIG_CNT</td>
+                </tr>
+                <tr>
+                    <td>Assembly N50</td>
+                    <td>$(printf "%'d" ${MEDAKA_N50:-0}) bp</td>
+                    <td class="val-new">$(printf "%'d" $N50_VAL) bp</td>
+                </tr>
+            </tbody>
+        </table>
+        <p style="font-size: 0.8rem; color: #7f8c8d; margin-top: 10px;">
+            * Short-read polishing (if provided) resulted in a net change of <b>$(printf "%'d" $POS_CHANGED) bp</b>.
         </p>
     </div>
 
-    <!-- QC Cards -->
-    <div class="qc-row">
-        ${KRAKEN_CARDS}
-
-        <div class="qc-card">
-            <span class="qc-label">EMU Taxonomy</span>
-            <span class="qc-val">${TAXID_DISPLAY}</span>
+    <div class="card">
+        <h2 style="margin-top:0;">AMR Color Legend</h2>
+        <div class="legend-container">
+            <div class="legend-item"><div class="swatch" style="background:#3498db;"></div>Beta-lactams / Penicillins</div>
+            <div class="legend-item"><div class="swatch" style="background:#9b59b6;"></div>Tetracyclines</div>
+            <div class="legend-item"><div class="swatch" style="background:#8e44ad;"></div>Aminoglycosides</div>
+            <div class="legend-item"><div class="swatch" style="background:#f1c40f;"></div>Macrolides / Lincosamides</div>
+            <div class="legend-item"><div class="swatch" style="background:#d35400;"></div>Phenicols</div>
+            <div class="legend-item"><div class="swatch" style="background:#27ae60;"></div>Quinolones</div>
+            <div class="legend-item"><div class="swatch" style="background:#16a085;"></div>Rifampicin</div>
+            <div class="legend-item"><div class="swatch" style="background:#e74c3c;"></div>Sulfonamides / Trimethoprim</div>
+            <div class="legend-item"><div class="swatch" style="background:#1abc9c;"></div>Colistin / Polymyxin</div>
+            <div class="legend-item"><div class="swatch" style="background:#e67e22;"></div>Fosfomycin</div>
+            <div class="legend-item"><div class="swatch" style="background:#ff7675;"></div>Glycopeptides / Vancomycin</div>
+            <div class="legend-item"><div class="swatch" style="background:#95a5a6;"></div>Biocides / Efflux</div>
+            <div class="legend-item"><div class="swatch" style="background:#000000;"></div>Virulence / Unknown</div>
         </div>
-        <div class="qc-card">
-            <span class="qc-label">Relative Abundance</span>
-            <span class="qc-val">${TOP_ABUNDANCE:-0.00}%</span>
-        </div>
-
-        ${HYBRID_METRICS}
     </div>
 
     <div class="card">
-        <h2>Assembly Quality Metrics</h2>
-        <table>
-            <colgroup>${COL_WIDTHS_ASSEMBLY}</colgroup>
-            <thead>${TABLE_HEADER}</thead>
-            <tbody>
-                ${ROW_LEN}
-                ${ROW_CNT}
-                ${ROW_N50}
-            </tbody>
-        </table>
-    </div>
-    <div class="card" style="text-align:center;">
-        <h2>Circular Genome Map (AMR Locations)</h2>
-        <div class="map-wrap">
-            ${MAP_CONTENT}
-        </div>
-        <p style="font-size:0.82rem; color:#95a5a6; margin-top:12px;">Genes found by NCBI AMRFinder+</p>
-    </div>
-    <div class="card" style="font-size:0.78rem;">
-        <h2>Resistance Profile (AMRFinder+)</h2>
-        <table>
-            <colgroup>
-                <col style="width:20%">
-                <col style="width:45%">
-                <col style="width:35%">
-            </colgroup>
-            <thead>
-                <tr><th>Gene</th><th>Class</th><th>Identity %</th></tr>
-            </thead>
-            <tbody>
-                ${AMR_ROWS}
-            </tbody>
-        </table>
+        <h2>Circular Genome Maps (AMR Locations)</h2>
+        <div class="map-grid">${MAP_CONTENT:-<p style="padding:20px; color:#95a5a6;">No maps generated.</p>}</div>
     </div>
 
-    <!-- Software Environment -->
+    <div class="card">$PYTHON_SUMMARY</div>
+    
     <div class="card">
-        <h2>Software Environment</h2>
-        <div class="software-grid">
-            <div class="soft-item"><b>Flye</b>${VER_FLYE}</div>
-            <div class="soft-item"><b>EMU</b>${VER_EMU}</div>
-            <div class="soft-item"><b>Polypolish</b>${VER_POLY}</div>
-            <div class="soft-item"><b>AMRFinder+</b>${VER_AMR}</div>
-            <div class="soft-item"><b>BWA</b>${VER_BWA}</div>
-            <div class="soft-item"><b>Medaka</b>${VER_MEDAKA}</div>
-            <div class="soft-item"><b>Filtlong</b>${VER_FILT}</div>
-            <div class="soft-item"><b>Bakta</b>${VER_BAKTA}</div>
-            <div class="soft-item"><b>Kraken2</b>${KRAKEN2_DB:+ (db: $(basename "$KRAKEN2_DB"))}</div>
-            <div class="soft-item"><b>FastP</b>${VER_FASTP}</div>
-            <div class="soft-item"><b>Samtools</b>${VER_SAM}</div>
-            <div class="soft-item"><b>MOSTAR</b>v${VERSION}</div>
+        <h2>Software Environment & Traceability</h2>
+        
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 25px;">
+            
+            <div style="overflow-x: auto;">
+                <table style="font-size: 0.85em; width: 100%;">
+                    <thead><tr><th colspan="2" style="border-bottom: 2px solid var(--border); padding-bottom: 8px 0;text-align: left">Primary Pipeline</th></tr></thead>
+                    <tr><td style="padding: 8px 0;"><b>Filtlong</b></td><td>$FILT_V</td></tr>
+                    <tr><td style="padding: 8px 0;"><b>Flye</b></td><td>$FLYE_V</td></tr>
+                    <tr><td style="padding: 8px 0;"><b>Medaka</b></td><td>$MEDAKA_V</td></tr>
+                    <tr><td style="padding: 8px 0;"><b>AMRFinder+</b></td><td>$AMRF_V</td></tr>
+                </table>
+            </div>
+
+            <div style="overflow-x: auto;">
+                <table style="font-size: 0.85em; width: 100%;">
+                    <thead><tr><th colspan="2" style="border-bottom: 2px solid var(--border); padding-bottom: 8px 0; text-align: left;">Hybrid-Assembly</th></tr></thead>
+                    <tr><td style="padding: 8px 0;"><b>Fastp</b></td><td>$FASTP_V</td></tr>
+                    <tr><td style="padding: 8px 0;"><b>BWA-MEM</b></td><td>$BWA_V</td></tr>
+                    <tr><td style="padding: 8px 0;"><b>Polypolish</b></td><td>$POLY_V</td></tr>
+                    <tr><td style="padding: 8px 0;">&nbsp;</td><td>&nbsp;</td></tr> 
+                </table>
+            </div>
+
+            <div style="overflow-x: auto;">
+                <table style="font-size: 0.85em; width: 100%;">
+                    <thead><tr><th colspan="2" style="border-bottom: 2px solid var(--border); padding-bottom: 8px 0; text-align: left;">Optional tools</th></tr></thead>
+                    <tr><td style="padding: 8px 0;"><b>Kraken2</b></td><td>$KRAKEN_V</td></tr>
+                    <tr><td style="padding: 8px 0;"><b>EMU</b></td><td>$EMU_V</td></tr>
+                    <tr><td style="padding: 8px 0;"><b>Bakta</b></td><td>$BAKTA_V</td></tr>
+                    <tr><td style="padding: 8px 0;">&nbsp;</td><td>&nbsp;</td></tr> 
+                </table>
+            </div>
         </div>
-    </div>
 
-    <!-- Footer -->
-    <div class="footer">MOSTAR v${VERSION} &nbsp;|&nbsp; Nermin Zecic, 2026</div>
-
-</div><!-- /.wrapper -->
+        <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 0.75rem; color: #7f8c8d;">
+                <b>Analysis Mode:</b> $([[ -n "${R1:-}" ]] && echo "Hybrid (ONT + Illumina)" || echo "ONT-Only")
+            </span>
+            <span style="font-size: 0.7rem; color: #bdc3c7;">MOSTAR v${VERSION:-1.0.0}</span>
+        </div>
+    </div> 
+    
+    <script>
+    document.querySelectorAll('.map-zoom-container').forEach(container => {
+        const img = container.querySelector('img');
+        container.addEventListener('mousemove', e => {
+            const rect = container.getBoundingClientRect();
+            const x = ((e.clientX - rect.left) / rect.width) * 100;
+            const y = ((e.clientY - rect.top) / rect.height) * 100;
+            img.style.transformOrigin = \`\${x}% \${y}%\`;
+        });
+        container.addEventListener('mouseleave', () => { 
+            img.style.transformOrigin = 'center center'; 
+        });
+    });
+    </script>
 </body>
 </html>
 EOF
-
-    echo "[MOSTAR] HTML report written to: $HTML_OUT"
 }
 
 # Defaults
@@ -442,7 +371,6 @@ BAKTA_SUCCESS=false
 R1=""
 R2=""
 ONT=""
-#PROT_REF=""
 ORGANISM=""
 EMU_DB=""
 OUTDIR=""
@@ -451,8 +379,8 @@ CLEANUP=false
 RUN_KRAKEN2=false
 KRAKEN2_DB=""
 KRAKEN_CONFIDENCE="0.1"
+USE_META=""
 
-# Options and arguments
 # Options and arguments
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -465,12 +393,13 @@ while [[ $# -gt 0 ]]; do
         -b|--bakta-db)      BAKTA_DB="$2"; shift 2 ;;
         -k|--kraken-db)     KRAKEN2_DB="$2"; RUN_KRAKEN2=true; shift 2 ;;
         -c|--confidence)    KRAKEN_CONFIDENCE="$2"; shift 2 ;;
-        -m|--medaka)        MEDAKA_MODEL="$2"; shift 2 ;;
+        -m|--model)        MEDAKA_MODEL="$2"; shift 2 ;;
         -p|--organism)      ORGANISM="$2"; shift 2 ;;
         -e|--emu-db)        EMU_DB="$2"; shift 2 ;;
         -t|--threads)       THREADS="$2"; shift 2 ;;
         -f|--filtlong-cov)  FILTLONG_COV="$2"; shift 2 ;;
         -i|--complete)      BAKTA_COMPLETE="--complete"; shift 1 ;;
+        -M|--meta)          USE_META=--meta; shift 1 ;;
         -x|--cleanup)       CLEANUP=true; shift 1 ;;
         -h|--help)          usage ;;
         *) echo "[ERROR] Unknown argument: $1"; usage ;;
@@ -479,29 +408,66 @@ done
 
 MISSING_ARGS=0
 
-if [[ -z "${ONT:-}" ]]; then
-    echo "[ERROR] Missing ONT reads (-n). Please provide your .fastq.gz file."
+# Check if input files exist and are valid
+if [[ -z "$ONT" ]]; then
+    echo "[ERROR] No input file specified (--ont)."
+    MISSING_ARGS=1
+elif [[ ! -f "$ONT" ]]; then
+    echo "[ERROR] Input-file not found: $ONT"
     MISSING_ARGS=1
 fi
 
-if [[ -z "${GSIZE:-}" ]]; then
-    echo "[ERROR] Missing Genome Size (-g). Example: -g 2.1m"
-    MISSING_ARGS=1
-fi
-
-if [[ -z "${OUTDIR:-}" ]]; then
-    echo "[ERROR] Missing Output Directory (-o). Where should I save the results?"
-    MISSING_ARGS=1
-fi
-
-# If any required arg is missing, show a tiny hint and exit
-if [[ $MISSING_ARGS -eq 1 ]]; then
-    echo ""
-    echo "Hint: mostar -n [reads.fq.gz] -g [size] -o [output_dir]"
-    echo "Run 'mostar -h' for full list of commands help."
+# Check wether user needs to provide genome size or not
+if [[ -z "$GSIZE" ]]; then
+    echo "[ERROR] Genome size (-g) is mandatory (e.g., -g 5.4m)."
     exit 1
 fi
 
+if [[ -z "$ONT" || ! -f "$ONT" ]]; then
+    echo "[ERROR] Valid ONT input file (--ont) is required."
+    exit 1
+fi
+
+# Check for missing tools
+for tool in flye medaka_consensus samtools bwa amrfinder; do
+    if ! command -v "$tool" &> /dev/null; then
+        echo "[ERROR] Verktøyet '$tool' er ikke installert eller finnes ikke i PATH."
+        MISSING_ARGS=1
+    fi
+done
+
+# Output directory setup
+if [[ -z "$OUTDIR" ]]; then
+    OUTDIR="MOSTAR_$(date +%Y%m%d_%H%M%S)"
+    echo "[WARNING] Output directory not set, using: $OUTDIR"
+fi
+mkdir -p "$OUTDIR/logs" "$OUTDIR/intermediate" "$OUTDIR/amr_results"
+
+# Check for BAKTA database
+SKIP_BAKTA=false
+if [[ -z "$BAKTA_DB" || ! -d "$BAKTA_DB" ]]; then
+    echo "[WARNING] Bakta database is missing or not specified. Skipping annotation."
+    SKIP_BAKTA=true
+fi
+
+# Check for Kraken2 database
+if [[ -z "$KRAKEN2_DB" || ! -d "$KRAKEN2_DB" ]]; then
+    echo "[INFO] Kraken2 database not found. Skipping taxonomy analysis."
+    RUN_KRAKEN2=false
+fi
+
+# Fallbacks for optional parameters
+[[ -z "$BAKTA_MIN_CONTIG_LEN" ]] && BAKTA_MIN_CONTIG_LEN=200
+[[ -z "$THREADS" ]] && THREADS=4
+
+# Stop if any critical arguments are missing
+if [[ $MISSING_ARGS -eq 1 ]]; then
+    echo "--------------------------------------------------------------------------------"
+    echo "Pipeline is missing required arguments or tools. Please review the errors above."
+    echo "Hint: run mostar -h for usage instructions."
+    exit 1
+fi
+    echo ""
     echo ""
     echo ""
     echo "              __      __   __    ____  _______   __     _____             "
@@ -585,16 +551,15 @@ if [[ -n "$R1" && -n "$R2" ]]; then
         --json "$OUTDIR/logs/fastp.json" \
         --html "$OUTDIR/logs/fastp.html" \
         > "$OUTDIR/logs/fastp.stdout" 2> "$OUTDIR/logs/fastp.stderr"
-        echo "[$(date +%T)] FastP short-read filtering completed"
+        echo "[$(date +%T)] FastP short-read filtering completed!"
         echo "[$(date +%T)] FastP log: $OUTDIR/logs/fastp.html"
+        echo "[$(date +%T)] FastP results: $OUTDIR/logs/fastp.json"
 else
     echo "=============================================================================="
-    echo "[$(date +%T)] Skipping FastP: No short-reads provided (ONT-only mode)"
+    echo "[$(date +%T)] ONT-only mode. Skipping FastP: No short-reads provided"
     echo "=============================================================================="
 fi
 
-
-echo ""
 echo ""
 echo "=============================================================================="
 echo "[$(date +%T)] Performing Long-read filtering using Filtlong"
@@ -605,12 +570,12 @@ UNIT=$(echo "$GSIZE" | tr -d '0-9.')
 TARGET_BASES=$(echo "$NUM" | awk '{print $1 * 100}')$UNIT
 
 if [[ -n "${R1:-}" ]]; then
-    filtlong --min_length 1000 --keep_percent 90 --target_bases "$TARGET_BASES" \
+    filtlong --min_length 1000 --keep_percent 95 --target_bases "$TARGET_BASES" \
              -1 "$OUTDIR/intermediate/sh_R1.fq.gz" \
              -2 "$OUTDIR/intermediate/sh_R2.fq.gz" \
              "$ONT" > "$OUTDIR/intermediate/ont_filt.fq" 2> "$OUTDIR/logs/filtlong.log"
 else
-    filtlong --min_length 1000 --keep_percent 90 --target_bases "$TARGET_BASES" \
+    filtlong --min_length 1000 --keep_percent 95 --target_bases "$TARGET_BASES" \
              "$ONT" > "$OUTDIR/intermediate/ont_filt.fq" 2> "$OUTDIR/logs/filtlong.log"
 fi
 
@@ -618,18 +583,112 @@ gzip -f "$OUTDIR/intermediate/ont_filt.fq"
 
 FILTERED_READ_COUNT=$(tail -n 1 "$OUTDIR/logs/filtlong.log" | awk '{print $1$2$3}' | tr -cd '0-9' || echo "0")
 
-echo "[$(date +%T)] Filtlong filtering completed"
+echo "[$(date +%T)] Filtlong filtering completed!"
 echo "[$(date +%T)] Filtlong log: $OUTDIR/logs/filtlong.log"
-echo ""
-echo ""
 
-# Taxonomic classification with EMU [Optional]
-TOP_TAXID="N/A"
-TOP_CONF="0.00"
-TOP_ABUNDANCE="0.00"
-TOP_SPECIES="Unknown"
+# De Novo Assembly with Flye
+echo ""
+echo "=============================================================================="
+echo "[$(date +%T)] De-novo assembly with Flye, this might take while..."
+echo "=============================================================================="
 
-if [[ -n "${EMU_DB:-}" ]]; then
+echo "[$(date +%T)] Starting assembly with genome size: $GSIZE" 
+
+flye --nano-hq "$OUTDIR/intermediate/ont_filt.fq.gz" \
+     --genome-size "$GSIZE" \
+     --threads "$THREADS" \
+     $USE_META \
+     --out-dir "$OUTDIR/flye" > "$OUTDIR/logs/flye.log" 2>&1
+
+echo "[$(date +%T)] Flye assembly completed!"
+echo "[$(date +%T)] Flye log: $OUTDIR/logs/flye.log"
+echo "[$(date +%T)] Flye assembly results: $OUTDIR/flye/assembly.fasta"
+
+# Polishing and error-correction with Medaka
+echo ""
+echo "=============================================================================="
+echo "[$(date +%T)] Read-error correction and consensus extraction with Medaka"
+echo "=============================================================================="
+echo "[$(date +%T)] Starting Medaka polishing with model: $MEDAKA_MODEL" 
+echo "[$(date +%T)] Medaka input assembly: $OUTDIR/flye/assembly.fasta" 
+
+medaka_consensus \
+    -i "$OUTDIR/intermediate/ont_filt.fq.gz" \
+    -d "$OUTDIR/flye/assembly.fasta" \
+    -m "$MEDAKA_MODEL" \
+    -t "$THREADS" \
+    -o "$OUTDIR/medaka" > "$OUTDIR/logs/medaka.log" 2>&1
+
+read M_LEN M_CNT M_N50 M_L50 <<< "$(calc_assembly_stats "$OUTDIR/medaka/consensus.fasta")"
+MEDAKA_LEN=$M_LEN
+MEDAKA_CNT=$M_CNT
+MEDAKA_N50=$M_N50
+
+echo "[$(date +%T)] Medaka polishing completed successfully!"
+echo "[$(date +%T)] Medaka log: $OUTDIR/logs/medaka.log"
+echo "[$(date +%T)] Medaka assembly stats - Total Length: ${M_LEN} bp, Contigs: ${M_CNT}, N50: ${M_N50} bp, L50: ${M_L50}"
+
+# Hybrid Polishing with Polypolish [Only in hybrid-mode]
+if [[ -n "$R1" && -n "$R2" ]]; then
+    echo ""
+    echo "=============================================================================="
+    echo "[$(date +%T)] Performing Long-read filtering using Polypolish"
+    echo "=============================================================================="
+    # Polypolish requires separate SAMs for R1 and R2 
+    bwa index "$OUTDIR/medaka/consensus.fasta" > "$OUTDIR/logs/bwa_index.log" 2>&1
+
+    bwa mem -t "$THREADS" "$OUTDIR/medaka/consensus.fasta" "$OUTDIR/intermediate/sh_R1.fq.gz" > "$OUTDIR/intermediate/1.sam" 2> "$OUTDIR/logs/bwa_r1.log"
+    bwa mem -t "$THREADS" "$OUTDIR/medaka/consensus.fasta" "$OUTDIR/intermediate/sh_R2.fq.gz" > "$OUTDIR/intermediate/2.sam" 2> "$OUTDIR/logs/bwa_r2.log"
+
+    samtools flagstat "$OUTDIR/intermediate/1.sam" > "$OUTDIR/logs/bwa_flagstat.txt" 2>&1
+    BWA_MAPPING_RATE=$(awk -F'[()]' '/mapped/{print $2}' "$OUTDIR/logs/bwa_flagstat.txt" | head -n1 | tr -d '%')
+
+    polypolish filter \
+        --in1 "$OUTDIR/intermediate/1.sam" \
+        --in2 "$OUTDIR/intermediate/2.sam" \
+        --out1 "$OUTDIR/intermediate/f1.sam" \
+        --out2 "$OUTDIR/intermediate/f2.sam" \
+        > /dev/null 2> "$OUTDIR/logs/polypolish_filter.log"
+
+    polypolish polish \
+        "$OUTDIR/medaka/consensus.fasta" \
+        "$OUTDIR/intermediate/f1.sam" \
+        "$OUTDIR/intermediate/f2.sam" \
+        > "$FINAL_ASM" 2> "$OUTDIR/logs/polypolish.log"
+    
+
+    MEAN_DEPTH=$(grep "mean read depth" "$OUTDIR/logs/polypolish.log" | awk '{print $4}')
+    POS_CHANGED=$(grep "positions changed" "$OUTDIR/logs/polypolish.log" | awk '{print $1}' | tr -d ',')
+    ZERO_DEPTH_BP=$(grep "depth of zero" "$OUTDIR/logs/polypolish.log" | awk '{print $1}' | tr -d ',')
+    read F_LEN F_CNT F_N50 F_L50 <<< "$(calc_assembly_stats "$FINAL_ASM")"
+    export FINAL_LEN="$F_LEN"
+    export FINAL_CNT="$F_CNT"
+    export FINAL_N50="$F_N50"
+    export MEAN_DEPTH POS_CHANGED ZERO_DEPTH_BP
+
+else
+    cp "$OUTDIR/medaka/consensus.fasta" "$FINAL_ASM"
+    export FINAL_LEN="${MEDAKA_LEN:-0}"
+    export FINAL_CNT="${MEDAKA_CNT:-0}"
+    export FINAL_N50="${MEDAKA_N50:-0}"
+    
+    export BWA_MAPPING_RATE="N/A"
+    export MEAN_DEPTH="N/A"
+    export POS_CHANGED=0
+    export ZERO_DEPTH_BP=0
+fi
+
+echo "[$(date +%T)] Polypolish hybrid polishing completed successfully!"
+echo "[$(date +%T)] Polypolish log: $OUTDIR/logs/polypolish.log"
+echo "[$(date +%T)] BWA mapping rate: ${BWA_MAPPING_RATE}%"
+
+# Run EMU and/or Kraken2 on assembly for taxonomic classification (Optional)
+ASM_SPECIES_FULL="Unknown_Bacteria"
+BAKTA_GENUS="Bacteria"
+BAKTA_SPECIES="sp."
+ORGANISM_FOR_AMR="Unknown"
+
+if [[ -n "${EMU_DB:-}" && -s "$FINAL_ASM" ]]; then
     EMU_FASTA="$EMU_DB/species_taxid.fasta"
     EMU_TAX="$EMU_DB/taxonomy.tsv"
 
@@ -653,411 +712,344 @@ if [[ -n "${EMU_DB:-}" ]]; then
 
     # Run EMU
     if [[ -f "$EMU_FASTA" ]]; then
+        echo ""
+        echo ""
         echo "=============================================================================="
         echo "[$(date +%T)] Running Taxonomic classification with EMU"
         echo "=============================================================================="   
-        mkdir -p "$OUTDIR/taxonomy"
-        emu abundance "$OUTDIR/intermediate/ont_filt.fq.gz" \
+        mkdir -p "$OUTDIR/taxonomy/emu_asm"
+        
+        # Running EMU on the polished fasta assembly for higher accuracy
+        emu abundance "$FINAL_ASM" \
                       --db "$EMU_DB" \
                       --threads "$THREADS" \
-                      --output-dir "$OUTDIR/taxonomy" \
+                      --output-dir "$OUTDIR/taxonomy/emu_asm" \
                       --output-basename emu_results > /dev/null 2>&1
 
         # Get results
-        EMU_REPORT=$(ls "$OUTDIR/taxonomy/"*rel-abundance.tsv 2>/dev/null | grep -v "species" | head -n 1)
+        EMU_REPORT=$(ls "$OUTDIR/taxonomy/emu_asm/"*rel-abundance.tsv 2>/dev/null | head -n 1)
         if [[ -n "$EMU_REPORT" && -s "$EMU_REPORT" ]]; then
             TOP_TAXID=$(awk -F'\t' 'NR==2 {print $1}' "$EMU_REPORT")
             TOP_ABUNDANCE=$(LC_NUMERIC=C awk -F'\t' 'NR==2 {printf "%.2f", $2*100}' "$EMU_REPORT")
-            echo "[$(date +%T)] EMU completed successfully."
+            echo "[$(date +%T)] EMU completed successfully on assembly."
+            echo "[$(date +%T)] EMU log: $OUTDIR/taxonomy/emu_asm/emu_results.log"
+            echo "[$(date +%T)] EMU top taxid: $TOP_TAXID with abundance: ${TOP_ABUNDANCE}%"
             echo "[$(date +%T)] EMU results: $EMU_REPORT"
         fi
     else
         echo "[ERROR] EMU failed to run."
-        fi
     fi
 fi
 
-# Run Kraken2 if database provided (Optional)
-K2_SPECIES="N/A"
-K2_TAXID="N/A"
-K2_ABUNDANCE="0.00"
+KRAKEN_ASM_REPORT="$OUTDIR/taxonomy/assembly_kraken_report.txt"
 
-if [[ -n "$KRAKEN2_DB" ]]; then
+if [[ "$RUN_KRAKEN2" == "true" && -s "$FINAL_ASM" ]]; then
+    echo ""
     echo "=============================================================================="
-    echo "[$(date +%T)] Running Taxonomic classification with Kraken2"
+    echo "[$(date +%T)] Taxonomic Classification with Kraken2"
     echo "=============================================================================="
-    
     mkdir -p "$OUTDIR/taxonomy"
-
-    [[ -z "$KRAKEN_CONFIDENCE" ]] && KRAKEN_CONFIDENCE="0.1"
-
-    KRAKEN_REPORT="$OUTDIR/taxonomy/kraken2_report.txt"
-    KRAKEN_OUTPUT="$OUTDIR/taxonomy/kraken2_output.txt"
-
-    if kraken2 --db "$KRAKEN2_DB" \
-               --threads "$THREADS" \
-               --confidence "$KRAKEN_CONFIDENCE" \
-               --report "$KRAKEN_REPORT" \
-               --output "$KRAKEN_OUTPUT" \
-               --gzip-compressed \
-               "$ONT" > /dev/null 2>&1; then
-
-        TOP_HIT=$(awk '$4 == "S" {print $0}' "$KRAKEN_REPORT" | sort -nr -k1,1 | head -n 1)
-
-        if [[ -n "$TOP_HIT" ]]; then
-            K2_ABUNDANCE=$(echo "$TOP_HIT" | awk '{print $1}')
-            K2_TAXID=$(echo "$TOP_HIT" | awk '{print $5}')
-            K2_SPECIES=$(echo "$TOP_HIT" | cut -f6- | sed 's/^[[:space:]]*//')
-            
-            echo "[$(date +%T)] Kraken2 completed: $K2_SPECIES ($K2_ABUNDANCE%)"
-            if [[ -z "$ORGANISM" ]]; then
-                ORGANISM=$(echo "$K2_SPECIES" | sed 's/ /_/g')
-            fi
-        fi
+    kraken2 --db "$KRAKEN2_DB" --threads "$THREADS" --report "$KRAKEN_ASM_REPORT" --confidence 0.0 "$FINAL_ASM" > /dev/null 2>&1
+    
+    TOP_HIT=$(awk -F'\t' '$4 == "S1"' "$KRAKEN_ASM_REPORT" | sort -k1,1nr | head -n 1)
+    if [[ -z "$TOP_HIT" ]]; then
+        TOP_HIT=$(awk -F'\t' '$4 == "S"' "$KRAKEN_ASM_REPORT" | sort -k1,1nr | head -n 1)
+    fi
+    if [[ -z "$TOP_HIT" ]]; then
+        TOP_HIT=$(awk -F'\t' '$4 == "G"' "$KRAKEN_ASM_REPORT" | sort -k1,1nr | head -n 1)
+    fi
+    
+    if [[ -n "$TOP_HIT" ]]; then
+        ASM_SPECIES_FULL=$(echo "$TOP_HIT" | cut -f6- | sed 's/^[[:space:]]*//')
+        BAKTA_GENUS=$(echo "$ASM_SPECIES_FULL" | awk '{print $1}')
+        BAKTA_SPECIES=$(echo "$ASM_SPECIES_FULL" | awk '{print $2}')
+        ORGANISM_FOR_AMR=$(echo "$ASM_SPECIES_FULL" | awk '{print $1"_"$2}')
+        echo "[$(date +%T)] Kraken2 completed successfully!" 
+        echo "[$(date +%T)] Kraken2 identified: $ASM_SPECIES_FULL"
+        echo "[$(date +%T)] Kraken2 log: $KRAKEN_ASM_REPORT"
+        echo "[$(date +%T)] Kraken2 results: $OUTDIR/taxonomy/assembly_kraken_report.txt"
+    else
+        echo "[$(date +%T)] Kraken2 did not identify any subspecies, species, or genus. Using defaults."
     fi
 fi
 
-# De Novo Assembly with Flye
-echo ""
-echo ""
-echo "=============================================================================="
-echo "[$(date +%T)] De-novo assembly with Flye"
-echo "=============================================================================="
-flye --nano-hq "$OUTDIR/intermediate/ont_filt.fq.gz" \
-     --genome-size "$GSIZE" \
-     --threads "$THREADS" \
-     --out-dir "$OUTDIR/flye"
-
-# Polishing and error-correction with Medaka
-echo ""
-echo ""
-echo "=============================================================================="
-echo "[$(date +%T)] Read-error correction and consensus extraction with Medaka"
-echo "=============================================================================="
-medaka_consensus \
-    -i "$OUTDIR/intermediate/ont_filt.fq.gz" \
-    -d "$OUTDIR/flye/assembly.fasta" \
-    -m "$MEDAKA_MODEL" \
-    -t "$THREADS" \
-    -o "$OUTDIR/medaka"
-
-read M_LEN M_CNT M_N50 M_L50 <<< "$(calc_assembly_stats "$OUTDIR/medaka/consensus.fasta")"
-
-
-
-# Hybrid Polishing with Polypolish [Only in hybrid-mode]
-if [[ -n "$R1" && -n "$R2" ]]; then
-    echo ""
-    echo ""
-    echo "=============================================================================="
-    echo "[$(date +%T)] Performing Long-read filtering using Polypolish"
-    echo "=============================================================================="
-    # Polypolish requires separate SAMs for R1 and R2 
-    bwa index "$OUTDIR/medaka/consensus.fasta" > "$OUTDIR/logs/bwa_index.log" 2>&1
-
-    bwa mem -t "$THREADS" "$OUTDIR/medaka/consensus.fasta" "$OUTDIR/intermediate/sh_R1.fq.gz" > "$OUTDIR/intermediate/1.sam"
-    bwa mem -t "$THREADS" "$OUTDIR/medaka/consensus.fasta" "$OUTDIR/intermediate/sh_R2.fq.gz" > "$OUTDIR/intermediate/2.sam"
-
-    samtools flagstat "$OUTDIR/intermediate/1.sam" > "$OUTDIR/logs/bwa_flagstat.txt"
-    BWA_MAPPING_RATE=$(awk -F'[()]' '/mapped/{print $2}' "$OUTDIR/logs/bwa_flagstat.txt" | head -n1 | tr -d '%')
-
-    polypolish filter \
-        --in1 "$OUTDIR/intermediate/1.sam" \
-        --in2 "$OUTDIR/intermediate/2.sam" \
-        --out1 "$OUTDIR/intermediate/f1.sam" \
-        --out2 "$OUTDIR/intermediate/f2.sam"
-
-    polypolish polish \
-        "$OUTDIR/medaka/consensus.fasta" \
-        "$OUTDIR/intermediate/f1.sam" \
-        "$OUTDIR/intermediate/f2.sam" \
-        > "$FINAL_ASM" 2> "$OUTDIR/logs/polypolish.log"
-
-    MEAN_DEPTH=$(grep "mean read depth" "$OUTDIR/logs/polypolish.log" | awk '{print $4}')
-    POS_CHANGED=$(grep "positions changed" "$OUTDIR/logs/polypolish.log" | awk '{print $1}' | tr -d ',')
-    ZERO_DEPTH_BP=$(grep "depth of zero" "$OUTDIR/logs/polypolish.log" | awk '{print $1}' | tr -d ',')
-else
-    cp "$OUTDIR/medaka/consensus.fasta" "$FINAL_ASM"
-    BWA_MAPPING_RATE="N/A"
-    MEAN_DEPTH="N/A"
-    POS_CHANGED=0
-    ZERO_DEPTH_BP=0
-fi
-
+# Run Bakta for functional annotation (Optional)
 if [[ -s "$FINAL_ASM" ]]; then
-    echo ""
-    echo "=============================================================================="
-    echo "[$(date +%T)] Functional Annotation (Bakta)"
-    echo "=============================================================================="
+    if [[ -n "${BAKTA_DB:-}" && -d "$BAKTA_DB" ]]; then
+        echo ""
+        echo "=============================================================================="
+        echo "[$(date +%T)] Functional Annotation (Bakta)"
+        echo "=============================================================================="
+        mkdir -p "$OUTDIR/annotation"
 
-    mkdir -p "$OUTDIR/annotation"
+        COMPLETE_FLAG=""
+        [[ "$BAKTA_COMPLETE" == "--complete" ]] && COMPLETE_FLAG="--complete"
 
-    if bakta \
-        --output "$OUTDIR/annotation" \
-        --prefix mostar_Annotation \
-        --threads "$THREADS" \
-        --db "$BAKTA_DB" \
-        --regions "BAKTA_REGIONS" \
-        --force \
-        --translation-table 11 \
-        --compliant \
-        --min-contig-len "$BAKTA_MIN_CONTIG_LEN" \
-        --complete "$BAKTA_COMPLETE" \
-        "$FINAL_ASM" > "$OUTDIR/logs/bakta.log" 2>&1; then
-        
-        echo "[$(date +%T)] Annotation successfully completed."
-        BAKTA_SUCCESS=true 
+        if bakta \
+            --output "$OUTDIR/annotation" \
+            --prefix "MOSTAR_${ORGANISM_FOR_AMR}" \
+            --threads "${THREADS:-2}" \
+            --db "$BAKTA_DB" \
+            --genus "${BAKTA_GENUS}" \
+            --species "${BAKTA_SPECIES}" \
+            --force \
+            --translation-table 11 \
+            --compliant \
+            --min-contig-length "${BAKTA_MIN_CONTIG_LEN:-1}" \
+            $COMPLETE_FLAG \
+            "$FINAL_ASM" > "$OUTDIR/logs/bakta.log" 2>&1; then
+            
+            echo "[$(date +%T)] Annotation successfully completed for ${BAKTA_GENUS} ${BAKTA_SPECIES}."
+            echo "[$(date +%T)] Bakta log: $OUTDIR/logs/bakta.log"
+            echo "[$(date +%T)] Bakta results: $OUTDIR/annotation/MOSTAR_${ORGANISM_FOR_AMR}.gff"
+            BAKTA_SUCCESS=true
+        else
+            echo "[ERROR] Bakta failed, check log: $OUTDIR/logs/bakta.log"
+            tail -n 5 "$OUTDIR/logs/bakta.log"
+            BAKTA_SUCCESS=false
+        fi
     else
-        echo "Bakta failed. Check $OUTDIR/logs/bakta.log" 
+        echo "[INFO] Bakta-database not found or not provided, skipping annotation."
         BAKTA_SUCCESS=false
     fi
-else
-    echo "[ERROR] Final assembly ($FINAL_ASM) is missing or empty. Skipping Bakta."
-    BAKTA_SUCCESS=false
 fi
 
-echo ""
+# Run AMRFinder+ for resistance gene detection
 echo ""
 echo "=============================================================================="
 echo "[$(date +%T)] AMR-resistance profile with NCBI-AMRFinder+"
 echo "=============================================================================="
 
-amrfinder --database_version >/dev/null 2>&1 || amrfinder -u
+CURRENT_SPECIES="${ASM_SPECIES_FULL:-${ORGANISM:-Unknown_Bacteria}}"
+AMR_ORG=$(echo "$CURRENT_SPECIES" | awk '{print $1"_"$2}')
 
-echo "Running AMRFinder+ with $THREADS threads on $FINAL_ASM (Organism: $ORGANISM)"
-AMR_CMD=(amrfinder --threads "$THREADS" --plus -n "$FINAL_ASM" -O "$ORGANISM")
-"${AMR_CMD[@]}" > "$OUTDIR/amr_results/AMR_Report.tsv"
+echo "[$(date +%T)] Analysing $FINAL_ASM"
+echo "[$(date +%T)] Target Organism for point mutations: $AMR_ORG"
+SUPPORTED_LIST="Acinetobacter_baumannii Campylobacter Citrobacter_freundii Enterobacter_asburiae Enterobacter_cloacae Enterococcus_faecalis Enterococcus_faecium Escherichia Haemophilus_influenzae Klebsiella_oxytoca Klebsiella_pneumoniae Neisseria_gonorrhoeae Neisseria_meningitidis Pseudomonas_aeruginosa Salmonella Serratia_marcescens Staphylococcus_aureus Staphylococcus_pseudintermedius Streptococcus_agalactiae Streptococcus_pneumoniae Streptococcus_pyogenes Vibrio_cholerae Vibrio_parahaemolyticus Vibrio_vulnificus"
 
+AMR_CMD=(amrfinder --threads "$THREADS" --plus -n "$FINAL_ASM")
+if [[ " $SUPPORTED_LIST " == *" $AMR_ORG "* ]]; then
+    echo "[$(date +%T)] AMRFinder+ is using specific model for: $AMR_ORG"
+    AMR_CMD+=("-O" "$AMR_ORG")
+else
+    echo "[$(date +%T)] No specific AMRFinder+ model available for $AMR_ORG, running generic search."
+fi
+
+echo "[$(date +%T)] Running: ${AMR_CMD[*]}"
+if "${AMR_CMD[@]}" > "$OUTDIR/amr_results/AMR_Report.tsv" 2> "$OUTDIR/logs/amrfinder.log"; then
+
+    GENE_COUNT=$(grep -v "Protein identifier" "$OUTDIR/amr_results/AMR_Report.tsv" | wc -l | xargs)
+    echo "[$(date +%T)] AMRFinder+ completed. Found $GENE_COUNT resistance elements."
+else
+    echo "[ERROR] AMRFinder+ failed. Check log: $OUTDIR/logs/amrfinder.log"
+fi
 
 # Cleanup intermediate files if the flag is set
 if [[ "$CLEANUP" == true ]]; then
     echo ""
-    echo ""
     echo "=============================================================================="
     echo "[$(date +%T)] Cleaning up and deleting intermediate files"
     echo "=============================================================================="
-    echo ""
-    echo ""
     rm -f "$OUTDIR/intermediate/"*.sam "$OUTDIR/intermediate/ont_filt.fq.gz"
 fi
 
 # ==============================================================================
 #                       AMR and Genome Visualization
 # ==============================================================================
-PLOT_BASE64=""
+
+export OUTDIR FINAL_ASM
+export AMR_FILE="$OUTDIR/amr_results/AMR_Report.tsv"
+export MAP_DIR="$OUTDIR/amr_results/maps"
 
 if command -v python3 &>/dev/null; then
-
-python3 - <<PYEOF
-import sys, os, json, numpy as np, pandas as pd
-import matplotlib.pyplot as plt, matplotlib.patches as mpatches
+    echo "[$(date +%T)] Generating Final Scientific Maps & Summary Table..."
+    
+    export OUTDIR FINAL_ASM AMR_FILE MAP_DIR
+    
+    python3 - <<'PYEOF'
+import sys, os, pandas as pd, numpy as np
+import matplotlib.pyplot as plt
 import matplotlib.patheffects as pe
+from matplotlib.patches import Polygon
+from Bio import SeqIO
+from Bio.SeqUtils import gc_fraction
 
-AMR_FILE   = "$OUTDIR/amr_results/AMR_Report.tsv"
-GENOME_LEN = $(grep -v "^>" "$FINAL_ASM" | tr -d '\n' | wc -c)
-OUTPUT_PNG = "$OUTDIR/amr_results/genome_map.png"
+# Load environment
+OUTDIR, FINAL_ASM, AMR_FILE, MAP_DIR = [os.environ.get(k) for k in ['OUTDIR', 'FINAL_ASM', 'AMR_FILE', 'MAP_DIR']]
+os.makedirs(MAP_DIR, exist_ok=True)
 
-def identity_color(val):
-    if val >= 100: return "#27ae60"   # green
-    elif val >= 90: return "#3498db"  # blue
-    else:           return "#e67e22"  # orange
+def get_class_color(amr_class):
+    # Standardize input to handle nan/empty
+    c = str(amr_class).lower().strip()
+    
+    # Cell Wall Synthesis (Beta-lactams) - Blues
+    if 'beta-lactam' in c or 'penicillin' in c or 'carbapenem' in c: return '#3498db'
+    # Protein Synthesis - Purples/Pinks
+    if 'tetracycline' in c: return '#9b59b6'
+    if 'aminoglycoside' in c: return '#8e44ad'
+    if 'macrolide' in c or 'lincosamide' in c or 'streptogramin' in c: return '#f1c40f'
+    if 'phenicol' in c: return '#d35400' 
+    # DNA/RNA Synthesis - Greens
+    if 'quinolone' in c or 'fluoroquinolone' in c: return '#27ae60'
+    if 'rifampicin' in c: return '#16a085'
+    # Metabolic Pathways - Reds
+    if 'sulfonamide' in c or 'trimethoprim' in c: return '#e74c3c'
+    # Last Resort / Miscellaneous - Teals/Corals
+    if 'colistin' in c or 'polymyxin' in c: return '#1abc9c'
+    if 'fosfomycin' in c: return '#e67e22'
+    if 'glycopeptide' in c or 'vancomycin' in c: return '#ff7675'
+    # Biocides / Efflux - Grey
+    if 'efflux' in c or 'disinfectant' in c: return '#95a5a6'
+    
+    # Virulence - Solid Black (Catching nan, empty, and unknown here)
+    if c in ['na', 'nan', '', 'none', 'unknown']: return '#000000'
+    
+    # Default for classes not explicitly listed above
+    return '#2c3e50'
 
-def bp_to_angle(bp, gl):
-    return np.pi / 2 - (bp / gl) * 2 * np.pi
-
-def draw_gene_arrow(ax, r_in, r_out, start, end, gl, color, forward, alpha=0.92):
-    a0, a1 = bp_to_angle(start, gl), bp_to_angle(end, gl)
-    angles = np.linspace(a0, a1, max(60, int(abs(a0 - a1) * 400)))
-    ax.fill(np.concatenate([r_out * np.cos(angles), r_in * np.cos(angles[::-1])]),
-            np.concatenate([r_out * np.sin(angles), r_in * np.sin(angles[::-1])]),
-            color=color, alpha=alpha, zorder=3, linewidth=0)
-    r_mid = (r_in + r_out) / 2
-    ta    = a1 if forward else a0
-    ba    = ta + (0.03 if forward else -0.03)
-    ax.fill([r_mid * np.cos(ta), r_out * np.cos(ba), r_in * np.cos(ba)],
-            [r_mid * np.sin(ta), r_out * np.sin(ba), r_in * np.sin(ba)],
-            color=color, alpha=min(alpha + 0.08, 1.0), zorder=4, linewidth=0)
+def calculate_gc(sequence, bins=1000):
+    n = len(sequence)
+    step = max(1, n // bins)
+    return np.array([gc_fraction(sequence[i:i+step]) for i in range(0, n, step)])
 
 try:
-    if not os.path.exists(AMR_FILE) or os.path.getsize(AMR_FILE) <= 10:
-        print("[WARN] AMR file missing or empty — skipping genome map"); sys.exit(0)
-    if GENOME_LEN == 0:
-        print("[WARN] Could not determine genome length — skipping genome map"); sys.exit(0)
+    if not os.path.exists(FINAL_ASM) or os.path.getsize(FINAL_ASM) == 0:
+        sys.exit(0)
 
-    df = pd.read_csv(AMR_FILE, sep="\t")
-    df["Start"]     = pd.to_numeric(df["Start"],                      errors="coerce").astype(int)
-    df["Stop"]      = pd.to_numeric(df["Stop"],                       errors="coerce").astype(int)
-    df["Strand"]    = df["Strand"].astype(str).str.strip()
-    df["%Identity"] = pd.to_numeric(df["% Identity to reference"],    errors="coerce").fillna(0)
-    df["Element symbol"] = df["Element symbol"].astype(str)
-    df = df.dropna(subset=["Start","Stop"]).sort_values("Start").reset_index(drop=True)
+    df = pd.read_csv(AMR_FILE, sep="\t") if os.path.exists(AMR_FILE) else pd.DataFrame()
+    records = sorted(list(SeqIO.parse(FINAL_ASM, "fasta")), key=lambda x: len(x.seq), reverse=True)
+    
+    extra_idx = 1
+    for i, record in enumerate(records):
+        gl, cid, seq_str = len(record.seq), record.id, str(record.seq)
+        is_main = (i == 0)
+        type_label = "Main Assembly" if is_main else "Extra-Chromosomal DNA"
+        file_name = "Main.png" if is_main else f"Extra-Chromosomal_DNA_{extra_idx}.png"
+        if not is_main: extra_idx += 1
 
-    # Keep only highest %Identity gene per overlapping position group
-    df["_pos_key"] = df["Start"].astype(str) + "_" + df["Stop"].astype(str)
-    df = df.sort_values("%Identity", ascending=False).drop_duplicates(subset="_pos_key").sort_values("Start").reset_index(drop=True)
+        fig = plt.figure(figsize=(10, 10))
+        ax = fig.add_subplot(111, projection='polar')
+        ax.set_theta_zero_location('N'); ax.set_theta_direction(-1) 
+        ax.spines['polar'].set_visible(False); ax.grid(False); ax.set_yticklabels([]); ax.set_ylim(0, 1.4) 
 
-    fig, ax = plt.subplots(figsize=(16, 16))
-    ax.set_xlim(-1.55, 1.55)
-    ax.set_ylim(-1.55, 1.55)
-    plt.tight_layout(pad=0)
-    fig.savefig(OUTPUT_PNG, dpi=300, bbox_inches="tight", pad_inches=0.05, facecolor="white")
+        # Coordinate Scale
+        ticks = np.linspace(0, 2*np.pi, 8, endpoint=False)
+        t_labs = [f"{round((gl*t/(2*np.pi))/1e6,1)} Mb" if gl>1e6 else f"{int(gl*t/(2*np.pi)/1000)} kb" for t in ticks]
+        ax.set_xticks(ticks); ax.set_xticklabels(t_labs, color='#7f8c8d', fontsize=15, fontweight='bold')
+        for tick in ticks:
+            ax.plot([tick, tick], [0, 1.15], color='#bdc3c7', lw=0.8, alpha=0.4, ls='--', zorder=0)
 
-    R_OUT, R_IN = 1.00, 0.82
-    ax.add_patch(plt.Circle((0,0), R_OUT, fill=False, ec="#bdc3c7", lw=0.7, zorder=1))
-    ax.add_patch(plt.Circle((0,0), R_IN,  fill=False, ec="#bdc3c7", lw=0.7, zorder=1))
+        # GC Content Track 
+        gc_vals = calculate_gc(seq_str, bins=1000)
+        avg_gc, t_gc = np.mean(gc_vals), np.linspace(0, 2*np.pi, len(gc_vals))
+        ax.fill_between(t_gc, 0.70, 0.70 + (gc_vals - avg_gc) * 1.0, color='#bdc3c7', alpha=0.5, zorder=1) 
 
-    # Tick marks every 0.2 Mb
-    for bp in range(0, GENOME_LEN, 200_000):
-        angle = bp_to_angle(bp, GENOME_LEN)
-        ax.plot([R_OUT * np.cos(angle), (R_OUT + 0.04) * np.cos(angle)],
-                [R_OUT * np.sin(angle), (R_OUT + 0.04) * np.sin(angle)],
-                color="#95a5a6", lw=0.8, zorder=2)
-        ax.text((R_OUT + 0.10) * np.cos(angle), (R_OUT + 0.10) * np.sin(angle),
-                "0" if bp == 0 else f"{bp/1e6:.1f} Mb",
-                ha="center", va="center", fontsize=12, color="#636e72",
-                rotation=np.degrees(angle) - 90)
+        # Backbone
+        r_min, r_max = 0.88, 1.07
+        ax.plot(np.linspace(0, 2*np.pi, 500), [r_min]*500, color='#bdc3c7', lw=1.5, alpha=0.6, zorder=2)
+        ax.plot(np.linspace(0, 2*np.pi, 500), [r_max]*500, color='#bdc3c7', lw=1.5, alpha=0.6, zorder=2)
 
-    # --- Draw all gene arrows ---
-    seen_pct_bands, legend_handles = set(), []
-    for idx, row in df.iterrows():
-        start, end = row["Start"], row["Stop"]
-        pct        = float(row["%Identity"])
-        color      = identity_color(pct)
-        forward    = row["Strand"] not in ("-", "minus")
-        draw_gene_arrow(ax, R_IN, R_OUT, start, end, GENOME_LEN, color, forward)
+        hits_count = 0
+        if not df.empty:
+            hits = df[df["Contig id"].astype(str).str.contains(str(cid), na=False)].sort_values("Start")
+            hits_count = len(hits)
+            last_ang, stagger, r_mid, min_vis = -1.0, 0, (r_min + r_max) / 2, 0.03 
 
-        band = ">= 100%" if pct >= 100 else ">= 90%" if pct >= 90 else "< 90%"
-        if band not in seen_pct_bands:
-            seen_pct_bands.add(band)
-            legend_handles.append(mpatches.Patch(facecolor=color, edgecolor="white",
-                                                 label=f"Identity {band}"))
+            for _, row in hits.iterrows():
+                s_rad, e_rad = (row['Start']/gl)*2*np.pi, (row['Stop']/gl)*2*np.pi
+                mid_rad, color = (s_rad + e_rad)/2, get_class_color(row["Class"])
+                if str(row.get("Strand", "+")) == "+":
+                    tip = e_rad if (e_rad - s_rad) > min_vis else s_rad + min_vis
+                    pts = [(s_rad, r_min), (s_rad, r_max), (tip, r_mid)]
+                else:
+                    tip = s_rad if (e_rad - s_rad) > min_vis else e_rad - min_vis
+                    pts = [(e_rad, r_min), (e_rad, r_max), (tip, r_mid)]
+                
+                ax.add_patch(Polygon(pts, facecolor=color, edgecolor='white', lw=1.8, alpha=1.0, zorder=15))
 
-    # --- Smart label placement: stack overlapping labels radially ---
-    df["_mid_angle"] = df.apply(
-        lambda r: bp_to_angle((r["Start"] + r["Stop"]) // 2, GENOME_LEN), axis=1)
+                if abs(mid_rad - last_ang) < 0.45: stagger = (stagger + 1) % 6
+                else: stagger = 0
+                l_rad = 1.35 + (stagger * 0.22)
+                last_ang = mid_rad
+                ax.plot([mid_rad, mid_rad], [r_max, l_rad-0.03], color='#bdc3c7', lw=1.2, ls=':', alpha=0.7)
+                t = ax.text(mid_rad, l_rad, row['Element symbol'], color=color, fontsize=12, fontweight='bold', ha='center', va='center')
+                t.set_path_effects([pe.withStroke(linewidth=4, foreground="white")])
 
-    # Group genes that are angularly close (within 0.25 rad ~14 degrees)
-    CLUSTER_GAP = 0.25
-    sorted_df = df.sort_values("_mid_angle", ascending=False).reset_index(drop=True)
+        # CENTER TEXT STACK 
+        ax.text(0, 0.45, "AMR Gene Map", ha='center', va='center', fontsize=24, fontweight='bold', color='#2c3e50')
+        ax.text(0, 0.32, f"GC Content: {avg_gc*100:.1f}%", ha='center', va='center', fontsize=13, color='#7f8c8d')
+        ax.text(0, 0.0, type_label, ha='center', va='center', fontsize=18, fontweight='bold', color='#34495e')
+        ax.text(np.pi, 0.22, f"{gl:,} bp", ha='center', va='center', fontsize=16, fontweight='bold', color='#2c3e50')
+        ax.text(np.pi, 0.40, f"{hits_count} AMR hits", ha='center', va='center', fontsize=12, color='#7f8c8d')
 
-    clusters = []
-    used = [False] * len(sorted_df)
-    for i in range(len(sorted_df)):
-        if used[i]: continue
-        cluster = [i]
-        used[i] = True
-        for j in range(i + 1, len(sorted_df)):
-            if used[j]: continue
-            if abs(sorted_df.loc[i, "_mid_angle"] - sorted_df.loc[j, "_mid_angle"]) < CLUSTER_GAP:
-                cluster.append(j)
-                used[j] = True
-        clusters.append(cluster)
+        plt.savefig(os.path.join(MAP_DIR, file_name), dpi=300, bbox_inches='tight', pad_inches=0.2, transparent=True)
+        plt.close()
 
-    for cluster in clusters:
-        # Mean angle of the cluster = where the bracket/leader points
-        angles = [sorted_df.loc[i, "_mid_angle"] for i in cluster]
-        mean_angle = np.mean(angles)
-        cos_a, sin_a = np.cos(mean_angle), np.sin(mean_angle)
+    # GENERATE SUMMARY TABLE
+    if not df.empty:
+        html = '<div class="table-container" style="margin-top:40px; font-family:sans-serif;">'
+        html += '<h3 style="color:#2c3e50; border-bottom:2px solid #bdc3c7; padding-bottom:10px;">AMR & Virulence Summary</h3>'
+        html += '<table style="width:100%; border-collapse:collapse; text-align:left;">'
+        html += '<thead style="background-color:#f8f9fa;"><tr>'
+        html += '<th style="padding:12px; border-bottom:2px solid #dee2e6;">Symbol</th><th>Class</th><th>Position</th><th>Strand</th><th>Identity</th></tr></thead><tbody>'
+        
+        for _, row in df.sort_values(["Contig id", "Start"]).iterrows():
+            raw_class = str(row["Class"]).strip()
+            
+            # Logic to swap 'nan' for 'Virulence'
+            if raw_class.lower() in ['nan', '', 'none', 'na']:
+                display_class = "Virulence"
+            else:
+                display_class = raw_class
 
-        # Place labels outside the ring always, stacked radially
-        BASE_R   = R_OUT + 0.18
-        STEP_R   = 0.13   # radial gap between stacked labels
-
-        for stack_idx, gene_idx in enumerate(cluster):
-            row   = sorted_df.loc[gene_idx]
-            pct   = float(row["%Identity"])
-            color = identity_color(pct)
-
-            gene_angle = row["_mid_angle"]
-            r_label    = BASE_R + stack_idx * STEP_R
-
-            # Short leader line from ring edge to first label only
-            if stack_idx == 0:
-                ax.plot([R_OUT * np.cos(gene_angle), (R_OUT + 0.15) * np.cos(mean_angle)],
-                        [R_OUT * np.sin(gene_angle), (R_OUT + 0.15) * np.sin(mean_angle)],
-                        color="#aab7b8", lw=0.6, zorder=2)
-
-            # Connecting tick between stacked labels
-            if stack_idx > 0:
-                prev_r = BASE_R + (stack_idx - 1) * STEP_R
-                ax.plot([(prev_r + 0.04) * cos_a, (r_label - 0.04) * cos_a],
-                        [(prev_r + 0.04) * sin_a, (r_label - 0.04) * sin_a],
-                        color="#d0d3d4", lw=0.4, zorder=2)
-
-            rot = np.degrees(mean_angle) - 90
-            if cos_a < 0:
-                rot += 180
-
-            t = ax.text(
-                r_label * cos_a,
-                r_label * sin_a,
-                row["Element symbol"],
-                ha="center", va="center",
-                fontsize=12, rotation=rot,
-                rotation_mode="anchor",
-                color=color, zorder=5,
-                fontweight="medium"
-            )
-            t.set_path_effects([pe.withStroke(linewidth=2.5, foreground="white")])
-
-    ax.text(0,  0.07, "AMR Gene Map",                                ha="center", fontsize=18, fontweight="bold", color="#2d3436")
-    ax.text(0, -0.03, f"{GENOME_LEN:,} bp  |  {len(df)} AMR hits",  ha="center", fontsize=14,  color="#7f8c8d")
-    ax.text(0, -0.13, "▶ forward   ◀ reverse",                      ha="center", fontsize=14, color="#95a5a6", style="italic")
-
-    legend_handles.sort(key=lambda p: p.get_label())
-    fig.legend(handles=legend_handles, title="AMR Genes % Identity to reference", loc="lower center",
-               ncol=3, fontsize=8.5, title_fontsize=9.5,
-               framealpha=0.95, edgecolor="#bdc3c7", bbox_to_anchor=(0.5, 0.01))
-
-    fig.savefig(OUTPUT_PNG, dpi=300, bbox_inches="tight", facecolor="white")
-    plt.close(fig)
-    print(f"[INFO] Genome map saved → {OUTPUT_PNG}")
+            color = get_class_color(raw_class)
+            
+            html += f'<tr style="border-bottom:1px solid #dee2e6;">'
+            html += f'<td style="padding:12px;"><span style="background:{color}; color:white; padding:4px 10px; border-radius:12px; font-weight:bold; font-size:0.9em;">{row["Element symbol"]}</span></td>'
+            html += f'<td style="padding:12px;">{display_class}</td>'
+            html += f'<td style="padding:12px; font-family:monospace;">{row["Start"]:,}-{row["Stop"]:,}</td>'
+            html += f'<td>{row["Strand"]}</td>'
+            html += f'<td style="padding:12px; font-weight:bold; color:#000000;">{row["% Identity to reference"]}%</td></tr>'
+            
+        html += '</tbody></table></div>'
+        with open(os.path.join(OUTDIR, "amr_summary.html"), "w") as f: f.write(html)
 
 except Exception as e:
-    import traceback; traceback.print_exc()
-    print(f"[ERROR] Genome map failed: {e}")
+    with open(os.path.join(OUTDIR, "logs/viz_error.log"), "w") as f: f.write(str(e))
 PYEOF
-
-    if [[ -f "$OUTDIR/amr_results/genome_map.png" ]]; then
-        PLOT_BASE64=$(base64 < "$OUTDIR/amr_results/genome_map.png" | tr -d '\n')
-        echo "[INFO] Genome map encoded for HTML embedding"
-    else
-        echo "[WARN] Genome map PNG not found"
-    fi
-else
-    echo "[WARN] python3 not found — skipping genome visualization"
 fi
 
-# Final stats and report generation
-echo ""
+# ==============================================================================
+#                      Assembly Statistics and Report Generation
+# ==============================================================================
+
 echo ""
 echo "=============================================================================="
 echo "          [$(date +%T)] Calculating Final Assembly Statistics..."
 echo "=============================================================================="
 
-# Filtlong read count (for report)
+# Handle Filtlong stats
+FILTERED_READ_COUNT=0
 if [[ -f "$OUTDIR/logs/filtlong.log" ]]; then
     FILTERED_READ_COUNT=$(tail -n 1 "$OUTDIR/logs/filtlong.log" | sed 's/ reads.*//' | tr -d '[:space:]' | tr -cd '0-9')
 fi
 
-# Calculate MEDAKA Stats (ONT Only)
-M_STATS=$(calc_assembly_stats "$OUTDIR/medaka/consensus.fasta")
-M_LEN=$(echo "$M_STATS" | awk '{print $1}')
-M_CNT=$(echo "$M_STATS" | awk '{print $2}')
-M_N50=$(echo "$M_STATS" | awk '{print $3}')
-
-# Calculate FINAL Stats (Polished)
-F_STATS=$(calc_assembly_stats "$FINAL_ASM")
-TOTAL_LEN=$(echo "$F_STATS" | awk '{print $1}')
-CONTIG_CNT=$(echo "$F_STATS" | awk '{print $2}')
-N50_VAL=$(echo "$F_STATS" | awk '{print $3}')
-
-# Hybrid Metrics (BWA and Polypolish)
-if [[ -f "$OUTDIR/logs/polypolish.log" ]]; then
-    MEAN_DEPTH=$(grep "mean read depth" "$OUTDIR/logs/polypolish.log" | awk '{print $4}')
-    POS_CHANGED=$(grep "positions changed" "$OUTDIR/logs/polypolish.log" | awk '{print $1}' | tr -d ',')
-    ZERO_DEPTH_BP=$(grep "depth of zero" "$OUTDIR/logs/polypolish.log" | awk '{print $1}' | tr -d ',')
+# Assembly Stats Calculation
+if [[ -f "$FINAL_ASM" && -s "$FINAL_ASM" ]]; then
+    echo "[$(date +%T)] Calculating final assembly metrics..."
+    TOTAL_LEN=$(grep -v "^>" "$FINAL_ASM" | tr -d '[:space:]' | wc -c | awk '{print $1}')
+    CONTIG_CNT=$(grep -c "^>" "$FINAL_ASM")
+    N50_VAL=$(grep -v "^>" "$FINAL_ASM" | awk '{print length}' | sort -nr | \
+        awk -v t="$TOTAL_LEN" '{s+=$1; if (t>0 && s>=t/2) {print $1; exit}}')
+else
+    echo "[ERROR] Final assembly file not found or empty: $FINAL_ASM"
+    TOTAL_LEN=0; CONTIG_CNT=0; N50_VAL=0
 fi
+
+# Clean up variables (replace nulls with 0)
+TOTAL_LEN=${TOTAL_LEN:-0}
+CONTIG_CNT=${CONTIG_CNT:-0}
+N50_VAL=${N50_VAL:-0}
 
 echo ""
 printf '%-18s %-20s %-20s\n' 'METRIC' 'MEDAKA (ONT)' 'FINAL (POLISHED)'
@@ -1065,7 +1057,7 @@ printf '%-18s %-20s %-20s\n' 'Total Length' "${M_LEN:-0} bp" "${TOTAL_LEN:-0} bp
 printf '%-18s %-20s %-20s\n' 'Contig Count' "${M_CNT:-0}" "${CONTIG_CNT:-0}"
 printf '%-18s %-20s %-20s\n' 'N50 Score' "${M_N50:-0} bp" "${N50_VAL:-0} bp"
 
-generate_html_report "$PLOT_BASE64"
+generate_html_report
 
 echo ""
 echo "================================================================================="

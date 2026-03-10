@@ -23,7 +23,7 @@ ASM_SPECIES_FULL="Unknown"
 # * AMR profiling
 # * Taxonomic profiling
 # * Built-in Quality controls
-# * HTML report generation with all the stats and results
+# * Interactive HTML report 
 
 # Help Menu
 usage() {
@@ -36,23 +36,22 @@ usage() {
     echo "      |_|\__/|_|  \__/  |____/   |_|  /_/  \_\ |_\ \_\            "
     echo ""
     echo ""
-    echo "     Assembly, Polishing, Annotation & AMR of ONT reads (v1.0.0)"
+    echo "Assembly, Polishing, Annotation & AMR of ONT reads (v1.0.0)"
     echo ""
-    echo "      Tip: MOSTAR can perform both hybrid and regular assembly"
+    echo "Tip: MOSTAR can perform both hybrid and regular assembly"
     echo ""
-    echo "Hybrid mode: mostar -n ont.fq.gz -g [size] -o [dir] -p [Organism] -1 R1.fq -2 R2.fq"
-    echo "ONT-only: mostar -n ont.fq.gz -g [size] -o [dir] -p [Organism]"
+    echo "Hybrid mode:      mostar --ont ont.fq.gz -genome-size [size] --output [dir] --r1 R1.fq --r2 R2.fq --model [Default:r1041_e82_400bps_sup_v5.2.0]"
+    echo "ONT-only mode:    mostar --ont ont.fq.gz --genome-size [size] --output [dir] --model [Defaul: r1041_e82_400bps_sup_v5.2.0]"
     echo ""
     echo "Required:"
     echo "  --ont           ONT Long reads [.fastq.gz]"
     echo "  --genome-size   Genome size [e.g., 2.1m, 5.0m, 4g]"
     echo "  --output        Output directory"
-    echo "  --model        Medaka model [Default: r1041_e82_400bps_sup_v5.2.0]"
+    echo "  --model         Medaka model [Default: r1041_e82_400bps_sup_v5.2.0]"
     echo ""
     echo "Options:"
     echo "  --r1/--r2       Illumina R1/R2 [Enables Hybrid mode]"
     echo "  --organism      Organism for AMRFinder+ [e.g., Escherichia, Staphylococcus]"
-    echo "  --filtlong-cov  Filtlong target coverage [Default: 100]"
     echo "  --meta          Enbale uneven coverage mode for Flye [Default: disabled]"
     echo ""
     echo "Annotation options:"
@@ -61,9 +60,12 @@ usage() {
     echo "  --complete      BAKTA enable if all sequences are complete (circular) [Default: disabled]"
     echo ""
     echo "Classification options:"
-    echo "  --kraken-db     Requires pre-built Kraken2 database"
+    echo "  --kraken-db     Requires path to pre-built Kraken2 database"
     echo "  --confidence    Kraken2 confidence threshold [Default: 0.1]"
-    echo "  --emu-db        Requires EMU database path, will auto-download [16s Amplicon classifier]"
+    echo "  --emu-db        Requires EMU database path [16s Amplicon classifier]"
+    echo ""
+    echo "Detection of conjugative elements:"
+    echo "  --ice           MacSyFinder CONJScan [Default: disabled]"
     echo ""
     echo "Other options:"
     echo "  --cleanup       Cleanup intermediate files"
@@ -86,7 +88,6 @@ generate_html_report() {
     local REPORT_DATE; REPORT_DATE=$(date '+%Y-%m-%d %H:%M:%S')
     local DURATION; DURATION=$(( ($(date +%s) - ${START_TIME:-0}) / 60 ))
     local TAXID_DISPLAY="<span style='color:#95a5a6;'>Not run</span>"
-    local POS_CHANGED=0
     local HYBRID_CARDS=""
     local METRICS_BLOCKS=""
     local TAX_CARDS=""
@@ -237,38 +238,7 @@ generate_html_report() {
         $HYBRID_CARDS
     </div>
 
-    <div class="card">
-        <h2>Assembly Metrics Comparison</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th style="width: 40%;">Metric</th>
-                    <th style="color: #7f8c8d;">Medaka (ONT Only)</th>
-                    <th style="color: var(--accent);">Final (Polished)</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>Total Genome Length</td>
-                    <td>$(printf "%'d" ${MEDAKA_LEN:-0}) bp</td>
-                    <td class="val-new">$(printf "%'d" $TOTAL_LEN) bp</td>
-                </tr>
-                <tr>
-                    <td>Contig Count</td>
-                    <td>${MEDAKA_CNT:-$CONTIG_CNT}</td>
-                    <td class="val-new">$CONTIG_CNT</td>
-                </tr>
-                <tr>
-                    <td>Assembly N50</td>
-                    <td>$(printf "%'d" ${MEDAKA_N50:-0}) bp</td>
-                    <td class="val-new">$(printf "%'d" $N50_VAL) bp</td>
-                </tr>
-            </tbody>
-        </table>
-        <p style="font-size: 0.8rem; color: #7f8c8d; margin-top: 10px;">
-            * Short-read polishing (if provided) resulted in a net change of <b>$(printf "%'d" $POS_CHANGED) bp</b>.
-        </p>
-    </div>
+    $METRICS_BLOCK
 
     <div class="card">
         <h2 style="margin-top:0;">AMR Color Legend</h2>
@@ -285,6 +255,7 @@ generate_html_report() {
             <div class="legend-item"><div class="swatch" style="background:#e67e22;"></div>Fosfomycin</div>
             <div class="legend-item"><div class="swatch" style="background:#ff7675;"></div>Glycopeptides / Vancomycin</div>
             <div class="legend-item"><div class="swatch" style="background:#95a5a6;"></div>Biocides / Efflux</div>
+            <div class="legend-item"><div class="swatch" style="background:#00f2ff;"></div>ICE / Conjugation Machinery</div>
             <div class="legend-item"><div class="swatch" style="background:#000000;"></div>Virulence / Unknown</div>
         </div>
     </div>
@@ -303,7 +274,7 @@ generate_html_report() {
             
             <div style="overflow-x: auto;">
                 <table style="font-size: 0.85em; width: 100%;">
-                    <thead><tr><th colspan="2" style="border-bottom: 2px solid var(--border); padding-bottom: 8px 0;text-align: left">Primary Pipeline</th></tr></thead>
+                    <th colspan="2" style="border-bottom: 2px solid var(--border); padding: 8px 0; text-align: left;">Primary Pipeline</th>
                     <tr><td style="padding: 8px 0;"><b>Filtlong</b></td><td>$FILT_V</td></tr>
                     <tr><td style="padding: 8px 0;"><b>Flye</b></td><td>$FLYE_V</td></tr>
                     <tr><td style="padding: 8px 0;"><b>Medaka</b></td><td>$MEDAKA_V</td></tr>
@@ -313,7 +284,7 @@ generate_html_report() {
 
             <div style="overflow-x: auto;">
                 <table style="font-size: 0.85em; width: 100%;">
-                    <thead><tr><th colspan="2" style="border-bottom: 2px solid var(--border); padding-bottom: 8px 0; text-align: left;">Hybrid-Assembly</th></tr></thead>
+                    <th colspan="2" style="border-bottom: 2px solid var(--border); padding: 8px 0; text-align: left;">Primary Pipeline</th>
                     <tr><td style="padding: 8px 0;"><b>Fastp</b></td><td>$FASTP_V</td></tr>
                     <tr><td style="padding: 8px 0;"><b>BWA-MEM</b></td><td>$BWA_V</td></tr>
                     <tr><td style="padding: 8px 0;"><b>Polypolish</b></td><td>$POLY_V</td></tr>
@@ -323,7 +294,7 @@ generate_html_report() {
 
             <div style="overflow-x: auto;">
                 <table style="font-size: 0.85em; width: 100%;">
-                    <thead><tr><th colspan="2" style="border-bottom: 2px solid var(--border); padding-bottom: 8px 0; text-align: left;">Optional tools</th></tr></thead>
+                    <th colspan="2" style="border-bottom: 2px solid var(--border); padding: 8px 0; text-align: left;">Primary Pipeline</th>
                     <tr><td style="padding: 8px 0;"><b>Kraken2</b></td><td>$KRAKEN_V</td></tr>
                     <tr><td style="padding: 8px 0;"><b>EMU</b></td><td>$EMU_V</td></tr>
                     <tr><td style="padding: 8px 0;"><b>Bakta</b></td><td>$BAKTA_V</td></tr>
@@ -380,6 +351,7 @@ RUN_KRAKEN2=false
 KRAKEN2_DB=""
 KRAKEN_CONFIDENCE="0.1"
 USE_META=""
+RUN_ICE=false
 
 # Options and arguments
 while [[ $# -gt 0 ]]; do
@@ -393,11 +365,11 @@ while [[ $# -gt 0 ]]; do
         -b|--bakta-db)      BAKTA_DB="$2"; shift 2 ;;
         -k|--kraken-db)     KRAKEN2_DB="$2"; RUN_KRAKEN2=true; shift 2 ;;
         -c|--confidence)    KRAKEN_CONFIDENCE="$2"; shift 2 ;;
-        -m|--model)        MEDAKA_MODEL="$2"; shift 2 ;;
+        -m|--model)         MEDAKA_MODEL="$2"; shift 2 ;;
         -p|--organism)      ORGANISM="$2"; shift 2 ;;
         -e|--emu-db)        EMU_DB="$2"; shift 2 ;;
         -t|--threads)       THREADS="$2"; shift 2 ;;
-        -f|--filtlong-cov)  FILTLONG_COV="$2"; shift 2 ;;
+        -I|--ice)           RUN_ICE=true; shift 1 ;;
         -i|--complete)      BAKTA_COMPLETE="--complete"; shift 1 ;;
         -M|--meta)          USE_META=--meta; shift 1 ;;
         -x|--cleanup)       CLEANUP=true; shift 1 ;;
@@ -566,25 +538,28 @@ echo "[$(date +%T)] Performing Long-read filtering using Filtlong"
 echo "=============================================================================="
 # Automatic filtlong calculation 100x
 NUM=$(echo "$GSIZE" | tr -d '[:alpha:]')
-UNIT=$(echo "$GSIZE" | tr -d '0-9.')
-TARGET_BASES=$(echo "$NUM" | awk '{print $1 * 100}')$UNIT
+UNIT=$(echo "$GSIZE" | tr -d '0-9.' | tr '[:lower:]' '[:upper:]')
+TARGET_BASES=$(awk -v n="$NUM" -v c="$FILTLONG_COV" 'BEGIN {printf "%.0f", n * c}')$UNIT
+
+echo "[$(date +%T)] Auto-calculating Filtlong target..."
+echo "[$(date +%T)] Genome: $GSIZE | Target Coverage: ${FILTLONG_COV}x | Total: $TARGET_BASES"
+
+SAFE_ONT="<(zcat -f '$ONT')"
+SAFE_R1="<(zcat -f '$R1')"
+SAFE_R2="<(zcat -f '$R2')"
 
 if [[ -n "${R1:-}" ]]; then
-    filtlong --min_length 1000 --keep_percent 95 --target_bases "$TARGET_BASES" \
-             -1 "$OUTDIR/intermediate/sh_R1.fq.gz" \
-             -2 "$OUTDIR/intermediate/sh_R2.fq.gz" \
-             "$ONT" > "$OUTDIR/intermediate/ont_filt.fq" 2> "$OUTDIR/logs/filtlong.log"
+    filtlong --min_length 1000 --keep_percent 95 -t "$TARGET_BASES" \
+             -1 "$R1" -2 "$R2" "$ONT" 2> "$OUTDIR/logs/filtlong.log" | gzip > "$OUTDIR/intermediate/ont_filt.fq.gz"
 else
-    filtlong --min_length 1000 --keep_percent 95 --target_bases "$TARGET_BASES" \
-             "$ONT" > "$OUTDIR/intermediate/ont_filt.fq" 2> "$OUTDIR/logs/filtlong.log"
+    filtlong --min_length 1000 --keep_percent 95 -t "$TARGET_BASES" \
+             "$ONT" 2> "$OUTDIR/logs/filtlong.log" | gzip > "$OUTDIR/intermediate/ont_filt.fq.gz"
 fi
 
-gzip -f "$OUTDIR/intermediate/ont_filt.fq"
+FILTERED_READ_COUNT=$(gzip -dc "$OUTDIR/intermediate/ont_filt.fq.gz" | wc -l | awk '{print int($1 / 4)}')
+FILTERED_READ_COUNT=${FILTERED_READ_COUNT:-0}
 
-FILTERED_READ_COUNT=$(tail -n 1 "$OUTDIR/logs/filtlong.log" | awk '{print $1$2$3}' | tr -cd '0-9' || echo "0")
-
-echo "[$(date +%T)] Filtlong filtering completed!"
-echo "[$(date +%T)] Filtlong log: $OUTDIR/logs/filtlong.log"
+echo "[$(date +%T)] Filtlong completed. $FILTERED_READ_COUNT reads kept."
 
 # De Novo Assembly with Flye
 echo ""
@@ -827,6 +802,15 @@ echo "[$(date +%T)] Analysing $FINAL_ASM"
 echo "[$(date +%T)] Target Organism for point mutations: $AMR_ORG"
 SUPPORTED_LIST="Acinetobacter_baumannii Campylobacter Citrobacter_freundii Enterobacter_asburiae Enterobacter_cloacae Enterococcus_faecalis Enterococcus_faecium Escherichia Haemophilus_influenzae Klebsiella_oxytoca Klebsiella_pneumoniae Neisseria_gonorrhoeae Neisseria_meningitidis Pseudomonas_aeruginosa Salmonella Serratia_marcescens Staphylococcus_aureus Staphylococcus_pseudintermedius Streptococcus_agalactiae Streptococcus_pneumoniae Streptococcus_pyogenes Vibrio_cholerae Vibrio_parahaemolyticus Vibrio_vulnificus"
 
+AMR_DB_PATH=$(amrfinder --database_version 2>&1 | grep "Database directory:" | awk '{print $NF}')
+
+if [[ ! -d "$AMR_DB_PATH" || -z "$(ls -A "$AMR_DB_PATH" 2>/dev/null)" ]]; then
+    echo "[$(date +%T)] Checking for AMRFinder+ database..."
+    amrfinder -u > /dev/null 2>&1 || true
+else
+    echo "[$(date +%T)] AMRFinder+ database found at: $AMR_DB_PATH"
+fi
+
 AMR_CMD=(amrfinder --threads "$THREADS" --plus -n "$FINAL_ASM")
 if [[ " $SUPPORTED_LIST " == *" $AMR_ORG "* ]]; then
     echo "[$(date +%T)] AMRFinder+ is using specific model for: $AMR_ORG"
@@ -851,6 +835,40 @@ if [[ "$CLEANUP" == true ]]; then
     echo "[$(date +%T)] Cleaning up and deleting intermediate files"
     echo "=============================================================================="
     rm -f "$OUTDIR/intermediate/"*.sam "$OUTDIR/intermediate/ont_filt.fq.gz"
+fi
+
+
+#  ICE & Conjugation (MacSyFinder)
+if [[ "$RUN_ICE" == "true" ]]; then
+    if command -v macsyfinder &>/dev/null; then
+        echo ""
+        echo "=============================================================================="
+        echo "[$(date +%T)] Detecting ICE & Conjugative Machinery (CONJScan)"
+        echo "=============================================================================="
+        
+        if command -v msf_data &>/dev/null; then
+            echo "[$(date +%T)] Ensuring CONJScan models are installed..."
+            msf_data install --user CONJScan > /dev/null 2>&1 || true
+        fi
+
+        mkdir -p "$OUTDIR/ice_detection"
+        
+        macsyfinder --db-type gembase --models CONJScan \
+                    --out-dir "$OUTDIR/ice_detection" \
+                    --sequence-db "$FINAL_ASM" --worker "$THREADS" all > /dev/null 2>&1 || true
+
+        if [[ -f "$OUTDIR/ice_detection/results.tab" ]]; then
+            awk -F'\t' 'NR>1 {print $1 "\t" $2 "\t" $3 "\t" $4 "\tConjugation\t" $2 "\t" $7 "\t" $8 "\t100"}' \
+                "$OUTDIR/ice_detection/results.tab" >> "$OUTDIR/amr_results/AMR_Report.tsv" || true
+                
+            ICE_COUNT=$(grep -v "^#" "$OUTDIR/ice_detection/results.tab" | wc -l | xargs)
+            echo "[$(date +%T)] MacSyFinder found $ICE_COUNT conjugative components."
+        else
+            echo "[$(date +%T)] No conjugative elements detected."
+        fi
+    else
+        echo "[WARNING] MacSyFinder requested but not installed. Skipping ICE detection."
+    fi
 fi
 
 # ==============================================================================
@@ -901,6 +919,10 @@ def get_class_color(amr_class):
     # Biocides / Efflux - Grey
     if 'efflux' in c or 'disinfectant' in c: return '#95a5a6'
     
+    # Conjugative Elements (ICE/Mobilization) - Neon Cyan
+    if any(x in c for x in ['conjugation', 't4ss', 'relaxase', 't4cp', 'type iv']): 
+        return '#00f2ff'
+
     # Virulence - Solid Black (Catching nan, empty, and unknown here)
     if c in ['na', 'nan', '', 'none', 'unknown']: return '#000000'
     
@@ -930,7 +952,7 @@ try:
         fig = plt.figure(figsize=(10, 10))
         ax = fig.add_subplot(111, projection='polar')
         ax.set_theta_zero_location('N'); ax.set_theta_direction(-1) 
-        ax.spines['polar'].set_visible(False); ax.grid(False); ax.set_yticklabels([]); ax.set_ylim(0, 1.4) 
+        ax.spines['polar'].set_visible(False); ax.grid(False); ax.set_yticklabels([]); ax.set_ylim(0, 1.35) 
 
         # Coordinate Scale
         ticks = np.linspace(0, 2*np.pi, 8, endpoint=False)
@@ -967,13 +989,14 @@ try:
                 
                 ax.add_patch(Polygon(pts, facecolor=color, edgecolor='white', lw=1.8, alpha=1.0, zorder=15))
 
-                if abs(mid_rad - last_ang) < 0.45: stagger = (stagger + 1) % 6
+                if abs(mid_rad - last_ang) < 0.12: stagger = (stagger + 1) % 12
                 else: stagger = 0
-                l_rad = 1.35 + (stagger * 0.22)
+                l_rad = 1.10 + (stagger * 0.035)
                 last_ang = mid_rad
-                ax.plot([mid_rad, mid_rad], [r_max, l_rad-0.03], color='#bdc3c7', lw=1.2, ls=':', alpha=0.7)
-                t = ax.text(mid_rad, l_rad, row['Element symbol'], color=color, fontsize=12, fontweight='bold', ha='center', va='center')
-                t.set_path_effects([pe.withStroke(linewidth=4, foreground="white")])
+                ax.plot([mid_rad, mid_rad], [r_max, l_rad-0.01], color='#bdc3c7', lw=0.4, alpha=0.2)
+                t = ax.text(mid_rad, l_rad, row['Element symbol'], color=color, 
+                    fontsize=8.5, fontweight='bold', ha='center', va='center')
+                t.set_path_effects([pe.withStroke(linewidth=1.5, foreground="white")])
 
         # CENTER TEXT STACK 
         ax.text(0, 0.45, "AMR Gene Map", ha='center', va='center', fontsize=24, fontweight='bold', color='#2c3e50')

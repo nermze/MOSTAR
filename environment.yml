@@ -24,7 +24,6 @@ dependencies:
   - emu
   # ICE & Conjugation Detection
   - macsyfinder
-  - macsy-profile-conjscan
   # Python Libraries
   - matplotlib
   - numpy

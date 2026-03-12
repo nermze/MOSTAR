@@ -7,7 +7,7 @@
 ### 
 MOSTAR is comprehensive and complete bioinformatics pipeline for downstream analysis of whole-genome Oxford Nanopore sequencing data (ONT-reads). The pipeline constructs highly-polished genomes (using hybrid- or non-hybrid assembly), in addition to performing functional annotation, AMR profiling, ICE detection, and taxonomic classification — with built-in quality controls and an interactive HTML report.  The name Mostar is inspired by the historic Stari Most (Old Bridge) of Mostar, a symbol of connection and cultural resilience.  
 
-MOSTAR has been developed and tested on *S. aureus*, *B. fragilis*, as well as *H. influenzae* strains, but will work with any bacteria, as long as the correct genome size and ONT model are specified. The pipeline contains some of the most well known tools in bioinformatics, and is designed to be a "one-stop shop" for most bacterial analysis. Finnaly the pipeline provides both a user-friendly run report, as well as individual results and log files from every included tool. 
+MOSTAR has been developed and tested on *S. aureus*, *B. fragilis*, as well as *H. influenzae* strains, but will work with any bacteria, as long as the correct genome size and ONT model are specified. The pipeline contains some of the most well known tools in bioinformatics, and is designed to be a "one-stop shop" for most bacterial analysis. Finnaly the pipeline provides individual results and log files from every included tool. 
 
 Note: Most settings are hard-coded in the initial release, however some of the key arguemnts are available to fine-tune the pipeline (see below). 
 
@@ -171,7 +171,6 @@ mostar --ont ont.fq.gz --genome-size [size] --output [dir]
 | Options | |
 | `--r1/--r2` | Illumina | Forward & Reverse short-reads (.fastq.gz) |
 | `--organism` | AMRFinder+ | Organism (e.g., Escherichia, Staphylococcus) |
-| `--filtlong-cov` | Filtlong | Target coverage (Default:100) |
 | `--meta` | Flye | Enable Meta-Genome mode, omit --genome-size [Default: disabled] |
 | Annotation | |
 | `--bakta-db` | Bakta | Path to Bakta database |
@@ -192,15 +191,9 @@ mostar --ont ont.fq.gz --genome-size [size] --output [dir]
 # Troubleshooting and known issues
 Q: Poor or fragmentet assembly
 A: Make sure to specify the correct expected genome size (--genome-size) and model (--model) example r1041.XX
-
-Q: My assembly is still failing
-A: Your input data might be too low quailty. Try reducing --filtlong-cov.  
-
-Q: Where are my plasmids?
+ 
+Q: I have highly uneven data
 A: Try running the pipeline with (--meta) 
-
-Q: Im getting an index-error during assembly with Flye
-A: You are using the same output folder from a previous run. Please specify a new output folder with (--output), or rename/move/delete the old one. 
 
 Q. My exact model is not accepted 
 A. you may need to downgrade medaka or install a specific version. You can do this by typing: conda install -c bioconda medaka=your_version, example medaka=2.2.0 

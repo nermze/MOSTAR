@@ -28,7 +28,7 @@ By integrating NCBI AMRFinder+ with MacSyFinder (ICE), the pipeline identifies t
 ### Workflow
 <p align="left">
   <div align="center" style="background-color: white; padding: 25px; border-radius: 10px;">
-    <img src="assets/Run_modes_visual.png" width="80" alt="MOSTAR Workflow Diagram">
+    <img src="assets/Run_modes_visual.png" width="80%" alt="MOSTAR Workflow Diagram">
   </div>
 </p>
 

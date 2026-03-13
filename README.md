@@ -131,12 +131,13 @@ mostar --ont ont.fq.gz --genome-size [size] --output [dir] --model [model] --r1 
 # Include taxonomy (S1), annotations & ICE-detection:
 mostar --ont ont_read.fastq.gz --r1 read1.fastq.gz --r2 read2.fastq.gz --genome-size 1.9m --output Output --kraken2-db kraken2_db_path --bakta-db db-light_path --ice 
   
-# Note: If model is not specified, r1041_e82_400bps_sup_v5.2.0. is used. 
-# Note: medaka tools list_models
-# Note: ICE detection (--ice) requires functional annotation. You must provide a Bakta database (--bakta-db) for this module to run.
-# Note: If --kraken2-db is provided, MOSTAR automatically identifies the species and configures the appropriate AMRFinder+ point-mutation model.
-# Note: Organism can be specified manually using the --organism flag, leave empty if uncertain.
-# Note: To view all supported organisms in NCBI AMRFinder+: amrfinder --list_organisms
+# Tips & Notes: 
+* If model is not specified, it will default to r1041_e82_400bps_sup_v5.2.0.
+* To see all available models, type: medaka tools list_models
+* ICE detection (--ice) requires functional annotation. You must provide a Bakta database (--bakta-db) for this module to run.
+* If --kraken2-db is provided, MOSTAR automatically identifies the species and configures the appropriate AMRFinder+ point-mutation model.
+* Organism can be specified manually using the --organism flag, leave empty if unknown.
+* To view all supported organisms in NCBI AMRFinder+, type: amrfinder --list_organisms
 </pre>  
 
 ### Command-Line Arguments
@@ -169,7 +170,6 @@ mostar --ont ont_read.fastq.gz --r1 read1.fastq.gz --r2 read2.fastq.gz --genome-
 # Interactive HTML-report 
 #### Species ID and QC-metrics for assembly
 The report features key run-metrics, including assembly statistics and number of contigs. The report is dynamic and will adapt to user input, as some of the tools like taxonomy and short-read polishing are optional.  
-
 <p align="center">
   <img src="assets/Main_report.png" 
        width="100%" alt="QC-Metrics">
@@ -224,7 +224,7 @@ Q: I have highly uneven data
 A: Try running the pipeline with (--meta) 
 
 Q. My exact model is not accepted 
-A. you may need to downgrade medaka or install a specific version. You can do this by typing: conda install -c bioconda medaka=your_version, example medaka=2.2.0 
+A. You may need to downgrade medaka or install a specific version. You can do this by typing: conda install -c bioconda medaka=your_version, example medaka=2.2.0 
 
 
 # Maintainer and author

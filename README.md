@@ -112,8 +112,14 @@ osf -p 56uf7 fetch osfstorage/emu-prebuilt/emu.tar
 tar -xvf emu.tar
 </pre> 
 
-### Basic usage
+### Usage instructions & input files
 <pre>
+# Required:
+* ONT-reads
+* Genome size 
+* Model
+* Output
+  
 # Run MOSTAR in ONT-only mode: 
 mostar --ont ont.fq.gz --genome-size [size] --output [dir] --model [model]
 

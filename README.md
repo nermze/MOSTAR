@@ -19,20 +19,15 @@ MOSTAR has been developed and tested on *S. aureus*, *B. fragilis*, as well as *
 #### Hybrid-Informed Quality Control
 MOSTAR utilizes a short-read informed selection strategy. By leveraging Illumina data during the pre-processing phase, the pipeline prioritizes ONT reads with the highest k-mer consistency relative to high-accuracy short reads. This ensures the assembly begins with the most reliable long-read subset possible.
 
-#### Automated Parameterization
-To remove the bottleneck of manual configuration, the pipeline automates the transition from taxonomic classification to deep profiling. Once the species is identified, the corresponding NCBI-AMRFinder+ point-mutation model for that specific organism is automatically loaded, ensuring precision without manual intervention.
-
 #### Mapping Genomic Plasticity
-By integrating NCBI AMRFinder+ with MacSyFinder (ICE), the pipeline identifies the physical location of resistance elements. Distinguishing between fixed chromosomal resistance and highly mobile Integrative Conjugative Elements (ICE) enables a more accurate assessment of horizontal gene transfer (HGT) risks within institutional environments.
+By integrating NCBI AMRFinder+ with MacSyFinder, the pipeline identifies the physical location of resistance elements. Distinguishing between fixed chromosomal resistance and highly mobile ICE enables a more accurate assessment of horizontal gene transfer.
 
-### Workflow
+### MOSTAR - Workflow and run-modes 
 <p align="left">
   <div align="left" style="background-color: white; padding: 25px; border-radius: 10px;">
     <img src="assets/Run_modes_visual.png" width="80%" alt="MOSTAR Workflow Diagram">
   </div>
 </p>
-
-## Run modes  
 
 #### ONT-only mode:
 * Long-read quality trimming 

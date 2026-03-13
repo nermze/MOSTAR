@@ -219,12 +219,15 @@ Finaly the report willl also feature a detailed AMR table.
 # Troubleshooting and known issues
 Q: Poor or fragmented assembly
 A: Make sure to specify the correct expected genome size (--genome-size) and model (--model) example r1041.XX
+
+Q: No ICE detected
+A: ICE detection requires annotation files. Make sure both --bakta-db as well as --ice are set.
  
-Q: I have highly uneven data
+Q: I have highly uneven data, will my assembly still work? 
 A: Try running the pipeline with (--meta) 
 
 Q. My exact model is not accepted 
-A. You may need to downgrade medaka or install a specific version. You can do this by typing: conda install -c bioconda medaka=your_version, example medaka=2.2.0 
+A. You may need to downgrade medaka or install a specific version. You can do this by typing: conda install -c bioconda medaka=your_version, example medaka=2.2.0. This may however break other tools, use at own risk.  
 
 
 # Maintainer and author

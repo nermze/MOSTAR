@@ -26,14 +26,11 @@ To remove the bottleneck of manual configuration, the pipeline automates the tra
 By integrating NCBI AMRFinder+ with MacSyFinder (ICE), the pipeline identifies the physical location of resistance elements. Distinguishing between fixed chromosomal resistance and highly mobile Integrative Conjugative Elements (ICE) enables a more accurate assessment of horizontal gene transfer (HGT) risks within institutional environments.
 
 ### Workflow
-<p align="center">
+<p align="left">
   <div align="center" style="background-color: white; padding: 25px; border-radius: 10px;">
-    <img src="assets/Run_modes_visual.png" width="100%" alt="MOSTAR Workflow Diagram">
+    <img src="assets/Run_modes_visual.png" width="80" alt="MOSTAR Workflow Diagram">
   </div>
 </p>
-
-
-
 
 ## Run modes  
 
@@ -170,23 +167,23 @@ mostar --ont ont_read.fastq.gz --r1 read1.fastq.gz --r2 read2.fastq.gz --genome-
 # Interactive HTML-report 
 #### Species ID and QC-metrics for assembly
 The report features key run-metrics, including assembly statistics and number of contigs. The report is dynamic and will adapt to user input, as some of the tools like taxonomy and short-read polishing are optional.  
-<p align="center">
+<p align="left">
   <img src="assets/Main_report.png" 
-       width="100%" alt="QC-Metrics">
+       width="80%" alt="QC-Metrics">
 </p>
 
 #### Genome visualization
 The report will also draw interactive genome maps, with visualizagion of AMR-gene locations, direction, detected ICE, and GC-content. 
-<p align="center">
+<p align="left">
   <img src="assets/AMR_and_Genome_visualization.png" 
-       width="100%" alt="Circular Genome Visualization">
+       width="80%" alt="Circular Genome Visualization">
 </p>
 
 #### Integrative Conjugative Elements (ICE)
 If ICE detection has been enabled, the pipeline will extract coordinates from the annotation file, and display the results. 
-<p align="center">
+<p align="left">
   <img src="assets/ICE_visual.png" 
-       width="100%" alt="Circular Genome Visualization">
+       width="50%" alt="Circular Genome Visualization">
 </p>
 
 #### AMR+ Summary Table

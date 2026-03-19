@@ -101,6 +101,9 @@ bakta_db download --output <output-path> --type [light|full]
 mkdir -p ~/kraken2_db && cd ~/kraken2_db
 wget https://genome-idx.s3.amazonaws.com/kraken/k2_pluspf_08gb_20240904.tar.gz
 tar -xvzf k2_pluspf_08gb_20240904.tar.gz
+
+# Download geNomad database in current directory, approx 1.5Gb 
+genomad download-database .
   
 # Download standard EMU database
 # The pipeline will auto-download the EMU-db if --emu-db is specified.
@@ -110,6 +113,7 @@ export EMU_DATABASE_DIR=<path_to_database>
 cd ${EMU_DATABASE_DIR}
 osf -p 56uf7 fetch osfstorage/emu-prebuilt/emu.tar
 tar -xvf emu.tar
+
 </pre> 
 
 ### Usage instructions & input files

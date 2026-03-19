@@ -8,6 +8,11 @@
   <img src="https://img.shields.io/badge/Maintained%3F-yes-green.svg" />
   <img src="https://img.shields.io/badge/License-MIT-blue.svg" />
   <img src="https://img.shields.io/badge/Bioinformatics-Pipeline-orange.svg" />
+  <img src="https://img.shields.io/badge/Oxford Nanopore-ONT reads-green.svg" />
+  <img src="https://img.shields.io/badge/Illumina-short reads-yellow.svg" />
+  <img src="https://img.shields.io/badge/python-3.9+-blue.svg" />
+  <img src="https://img.shields.io/badge/Conda-Supported-lightblue.svg" />
+  <img src="https://img.shields.io/badge/v1.0.0-Initial release-green.svg" />
 </p>
 
 MOSTAR is comprehensive and complete bioinformatics pipeline for downstream analysis of whole-genome Oxford Nanopore sequencing data (ONT-reads). The pipeline constructs highly-polished genomes (using hybrid- or non-hybrid assembly), in addition to performing functional annotation, AMR profiling, ICE detection, and taxonomic classification — with built-in quality controls and an interactive HTML report. The name Mostar is inspired by the historic Stari Most (Old Bridge) of Mostar, a symbol of connection and cultural resilience.  

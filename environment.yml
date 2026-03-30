@@ -10,7 +10,7 @@ dependencies:
   - medaka=2.2.0
   - filtlong
   - polypolish
-  # Pre-processing & Alignment 
+  # Pre-processing & Alignment
   - fastp
   - bwa
   - samtools>=1.19
@@ -24,14 +24,15 @@ dependencies:
   - emu
   # ICE & Conjugation Detection
   - macsyfinder
-  # Python Libraries
+  # Plasticity & Mobile Elements
+  - genomad
+  # Python Libraries for Visualization & Reports
   - matplotlib
   - numpy
   - pandas
   - biopython
-  # Supporting Utilities 
+  # Supporting Utilities
   - mamba
-  - osfclient 
-  - bc        
-  - wget       
-  - curl       
+  - osfclient
+  - wget
+  - curl

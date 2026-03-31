@@ -143,7 +143,9 @@ run_step() {
     fi
 
     if [[ "$pct_end" -eq 100 ]]; then
-        echo -e "\n${G}✔ Pipeline finished successfully.${N}"
+        echo ""
+        echo ""
+        echo -e "\n${G}✔ MOSTAR finished successfully.${N}"
     fi
 }
 
@@ -264,18 +266,49 @@ generate_html_report() {
     # AMR table
     full_amr_section=""
     if [[ -f "$amr_tsv" ]]; then
+        amr_html=$(python3 - "$amr_tsv" <<'PYAMR'
+import sys, pandas as pd
+
+def row_color(cls):
+    c = str(cls).lower()
+    if any(x in c for x in ['beta-lactam', 'penicillin', 'carbapenem']): return '#3498db'
+    if 'tetracycline'    in c: return '#9b59b6'
+    if 'aminoglycoside'  in c: return '#8e44ad'
+    if any(x in c for x in ['macrolide', 'lincosamide', 'streptogramin']): return '#f1c40f'
+    if 'quinolone' in c or 'fluoroquinolone' in c: return '#27ae60'
+    if 'virulence' in c: return '#000000'
+    return '#2c3e50'
+
+df = pd.read_csv(sys.argv[1], sep='\t')
+df['Class'] = df['Class'].fillna('Virulence')
+df = df[['Element symbol', 'Class', '% Identity to reference', 'Contig id']]
+
+rows = ""
+for _, r in df.iterrows():
+    color = row_color(r['Class'])
+    rows += (
+        f"<tr>"
+        f"<td><span style='border-left:4px solid {color};"
+        f"padding-left:10px;font-weight:600;'>{r['Element symbol']}</span></td>"
+        f"<td style='color:{color};font-weight:600;'>{r['Class']}</td>"
+        f"<td>{r['% Identity to reference']:.1f}%</td>"
+        f"<td style='color:#7f8c8d;font-size:0.85em;'>{r['Contig id']}</td>"
+        f"</tr>"
+    )
+
+print(
+    "<table class='resistome-table'>"
+    "<thead><tr><th>Gene</th><th>Class</th><th>Identity</th><th>Contig</th></tr></thead>"
+    f"<tbody>{rows}</tbody>"
+    "</table>"
+)
+PYAMR
+)
         full_amr_section="<div class='card'>
             <h2>Complete Resistome Profile (AMRFinder+)</h2>
             <p>All identified resistance and virulence elements.</p>
             <div style='overflow-x:auto;'>
-            $(python3 - <<PYAMR
-import pandas as pd
-df = pd.read_csv('$amr_tsv', sep='\t')
-df['Class'] = df['Class'].fillna('Virulence')
-df = df[['Element symbol', 'Class', '% Identity to reference', 'Contig id']]
-print(df.to_html(classes='resistome-table', index=False, border=0))
-PYAMR
-)
+            ${amr_html}
             </div>
         </div>"
     fi
@@ -286,7 +319,7 @@ PYAMR
         mobile_section="<section class='card'>
             <h2>Mobile Resistome &amp; Genomic Plasticity</h2>
             <div class='alert-box alert-red'>
-                <strong>&#9888; Alert:</strong> Found
+                <strong>Alert:</strong> Found
                 <span class='big-num'>${HIGH_RISK_COUNT}</span>
                 high-risk plasmid-borne resistance elements.
             </div>
@@ -780,9 +813,10 @@ fi
 if [[ "$RUN_KRAKEN2" == "true" ]]; then
     mkdir -p "$OUTDIR/taxonomy"
     run_step "Taxonomy (Kraken2)" "true" \
-        "kraken2 --db '$KRAKEN2_DB' --threads $THREADS \
-            --report '$KRAKEN_REPORT' '$FINAL_ASM' \
-            >/dev/null 2>&1"
+    "kraken2 --db '$KRAKEN2_DB' --threads $THREADS \
+    --confidence '$KRAKEN_CONFIDENCE' \
+    --report '$KRAKEN_REPORT' '$FINAL_ASM' \
+    >/dev/null 2>&1"
 
     if [[ -s "$KRAKEN_REPORT" ]]; then
         TOP_HIT=$(awk -F'\t' '$4 ~ /^S/' "$KRAKEN_REPORT" | sort -k1,1nr | head -n1 || true)
@@ -806,8 +840,10 @@ if [[ "$SKIP_BAKTA" == "false" && -n "$BAKTA_DB" ]]; then
             --threads $THREADS \
             --force \
             ${BAKTA_COMPLETE:-} \
+            ${BAKTA_REGIONS:+--regions '$BAKTA_REGIONS'} \
             '$FINAL_ASM' \
             >'$OUTDIR/logs/bakta.log' 2>&1"
+    
 else
     run_step "Annotation (Bakta)" "false" ""
 fi
@@ -817,6 +853,7 @@ fi
 # ==============================================================================
 run_step "AMR Profiling (AMRFinder+)" "true" \
     "amrfinder --threads $THREADS --plus \
+        ${ORGANISM:+--organism '$ORGANISM'} \
         -n '$FINAL_ASM' \
         >'$OUTDIR/amr_results/AMR_Report.tsv' \
         2>'$OUTDIR/logs/amrfinder.log'"
@@ -844,110 +881,61 @@ else
 fi
 
 # Parse MacSyFinder output → ICE_locations.tmp (used by the circular map)
-ICE_TMP="$OUTDIR/amr_results/ICE_locations.tmp"
+ICE_FILE="$OUTDIR/amr_results/ICE_locations.tmp"
 if [[ "$RUN_ICE" == "true" && -d "$OUTDIR/ice_detection" ]]; then
     BEST_SOL=$(find "$OUTDIR/ice_detection" -name "best_solution.tsv"         2>/dev/null | head -n1 || true)
     BEST_SUM=$(find "$OUTDIR/ice_detection" -name "best_solution_summary.tsv" 2>/dev/null | head -n1 || true)
 
     if [[ -f "$BEST_SUM" && -f "$BEST_SOL" ]]; then
-        python3 - <<PYICE
-import os, pandas as pd
+        # Updated Step 10: Mapping ICE to REAL genomic coordinates
+python3 - <<PYICE
+import os, pandas as pd, re
 from io import StringIO
 
-def read_macsyfinder_tsv(path):
-    """Return a DataFrame from a MacSyFinder TSV, skipping # comment lines."""
-    with open(path) as fh:
-        lines = [l for l in fh if not l.startswith('#') and l.strip()]
+def read_msf(path):
+    with open(path) as f:
+        lines = [l for l in f if not l.startswith('#') and l.strip()]
     return pd.read_csv(StringIO(''.join(lines)), sep='\t')
 
-# Identify systems that actually have at least one hit
-summary        = read_macsyfinder_tsv('$BEST_SUM')
-system_cols    = [c for c in summary.columns if c != 'replicon']
-active_systems = [c for c in system_cols if summary[c].sum() > 0]
+summary = read_msf('$BEST_SUM')
+active_systems = [c for c in summary.columns if c != 'replicon' and summary[c].sum() > 0]
+if not active_systems: exit(0)
 
-if not active_systems:
-    print("[INFO] No active ICE systems detected.")
-    exit(0)
-
-active_labels = {s: s.split('/')[-1] for s in active_systems}
-print(f"[INFO] Active ICE systems: {', '.join(active_labels.values())}")
-
-# Filter gene-level hits to active systems only
-best = read_macsyfinder_tsv('$BEST_SOL')
+best = read_msf('$BEST_SOL')
 best = best[best['model_fqn'].isin(active_systems)]
 
-if best.empty:
-    print("[WARNING] best_solution.tsv has no rows for active systems.")
-    exit(0)
-
-# Load Bakta GFF for bp coordinates
-gff_file = next(
-    (os.path.join(r, f)
-     for r, _, files in os.walk('$OUTDIR/annotation')
-     for f in files if f.endswith('.gff3') or f.endswith('.gff')),
+# Get the source of truth from GFF (maps locus_tag to real contig ID)
+gff_path = next(
+    (os.path.join(root, fname)
+     for root, dirs, files in os.walk('$OUTDIR/annotation')
+     for fname in files
+     if fname.endswith('.gff') or fname.endswith('.gff3')),
     None
 )
-if not gff_file:
-    print("[WARNING] No GFF found — cannot map ICE to genomic coordinates.")
-    exit(0)
 
-gff_rows = []
-with open(gff_file) as fh:
-    for line in fh:
-        if line.startswith('#') or not line.strip():
-            continue
-        parts = line.strip().split('\t')
-        if len(parts) < 9:
-            continue
-        contig, _, _, start, stop, _, strand, _, attrs = parts
-        for attr in attrs.split(';'):
-            if attr.startswith('ID=') or attr.startswith('locus_tag='):
-                gff_rows.append({
-                    'gene_id': attr.split('=')[1].strip(),
-                    'contig':  contig,
-                    'start':   int(start),
-                    'stop':    int(stop),
-                    'strand':  strand,
-                })
-                break
-gff_df = pd.DataFrame(gff_rows)
+coord_map = {}
+if gff_path:
+    with open(gff_path) as f:
+        for line in f:
+            if line.startswith('#') or '\t' not in line: continue
+            p = line.strip().split('\t')
+            lt = re.search(r'locus_tag=([^;]+)', p[8])
+            if lt: coord_map[lt.group(1)] = (p[0], int(p[3]), int(p[4]), p[6])
 
-# For each active system, compute the genomic span of all member genes
+# Build regions using the REAL contig name from the GFF (e.g., contig_1)
 out_rows = []
-for sys_fqn, group in best.groupby('model_fqn'):
-    label  = active_labels.get(sys_fqn, sys_fqn.split('/')[-1])
-    contig = group['replicon'].iloc[0]
-
-    coords = []
-    for hit_id in group['hit_id']:
-        m = gff_df[gff_df['gene_id'] == hit_id.strip()]
-        if not m.empty:
-            coords.append((m.iloc[0]['start'], m.iloc[0]['stop'], m.iloc[0]['strand']))
-
-    if not coords:
-        print(f"[WARNING] No GFF coordinates for {label} — skipping.")
-        continue
-
-    span_start = min(c[0] for c in coords)
-    span_stop  = max(c[1] for c in coords)
-    strands    = [c[2] for c in coords]
-    dom_strand = '+' if strands.count('+') >= strands.count('-') else '-'
-
-    out_rows.append({'Contig': contig, 'Symbol': label,
-                     'Start': span_start, 'Stop': span_stop, 'Strand': dom_strand})
-    print(f"[INFO] {label}: {span_start:,}–{span_stop:,} bp ({dom_strand}), "
-          f"{len(coords)} genes, {(span_stop - span_start)/1000:.1f} kb")
+for sys_id, group in best.groupby('model_fqn'):
+    hits = [coord_map[hid] for hid in group['hit_id'] if hid in coord_map]
+    if hits:
+        out_rows.append([hits[0][0], sys_id.split('/')[-1], min(h[1] for h in hits), max(h[2] for h in hits), hits[0][3]])
 
 if out_rows:
-    pd.DataFrame(out_rows).to_csv('$ICE_TMP', sep='\t', index=False, header=False)
-    print(f"[INFO] Wrote {len(out_rows)} ICE region(s) to ICE_locations.tmp")
-else:
-    print("[WARNING] Could not map any ICE system to genomic coordinates.")
+    pd.DataFrame(out_rows).to_csv('$ICE_FILE', sep='\t', index=False, header=False)
 PYICE
     else
-        echo "[WARNING] MacSyFinder output files not found — skipping ICE coordinate parsing."
+        echo "[WARNING] MacSyFinder output files are incomplete — cannot parse ICE locations."
     fi
-fi
+fi    
 
 # ==============================================================================
 #  Step 11 — Genomic Plasticity (geNomad)  [optional]
@@ -1064,9 +1052,9 @@ def amr_color(amr_class, amr_type="AMR"):
     return '#2c3e50'
 
 
-def draw_map(record, filename, centre_label):
+def draw_map(record, filename, centre_label, ice_df, amr_df):
     gl        = len(record.seq)
-    cid       = str(record.id).split()[0]
+    cid_clean = str(record.id).split()[0]
     two_pi    = 2 * np.pi
 
     fig = plt.figure(figsize=(10, 10))
@@ -1079,18 +1067,18 @@ def draw_map(record, filename, centre_label):
     ax.grid(False)
     ax.set_ylim(0, 1.45)
 
-    # -- Radial guide lines + bp position labels (8 divisions) ----------------
+    # Radial guide lines + bp position labels (8 divisions)
     for rad in np.linspace(0, two_pi, 8, endpoint=False):
         ax.plot([rad, rad], [0.3, 1.1], color='#d1d8e0', lw=0.8, ls='--', zorder=0)
         bp = int((rad / two_pi) * gl)
-        if   bp == 0:          lbl = "0"
-        elif bp >= 1_000_000:  lbl = f"{bp/1_000_000:.1f} Mb"
-        elif bp >= 1_000:      lbl = f"{bp/1_000:.0f} kb"
-        else:                  lbl = f"{bp} bp"
+        if   bp == 0:         lbl = "0"
+        elif bp >= 1_000_000: lbl = f"{bp/1_000_000:.1f} Mb"
+        elif bp >= 1_000:     lbl = f"{bp/1_000:.0f} kb"
+        else:                 lbl = f"{bp} bp"
         ax.text(rad, 1.25, lbl, ha='center', va='center',
                 fontsize=6.5, color='#95a5a6', fontweight='500')
 
-    # -- GC content (innermost ring, radius ~0.70) -----------------------------
+    # GC content (innermost ring, radius ~0.70)
     step     = max(1, gl // 500)
     gc_vals  = np.array([gc_fraction(record.seq[j:j+step]) for j in range(0, gl, step)])
     theta_gc = np.linspace(0, two_pi, len(gc_vals))
@@ -1100,60 +1088,76 @@ def draw_map(record, filename, centre_label):
                     0.70 + (gc_vals - avg_gc) * 0.60,
                     color='#bdc3c7', alpha=0.6, zorder=2)
 
-    # -- ICE / mobilome track (middle ring, radius 0.85) ----------------------
+    # ICE / mobilome track (middle ring, radius 0.85)
     ax.plot(np.linspace(0, two_pi, 200), [0.85] * 200,
             color='#edf2f7', lw=10, alpha=0.3, zorder=1)
 
-    if os.path.exists(ICE_FILE):
-        ice_df = pd.read_csv(ICE_FILE, sep='\t',
-                             names=['Contig', 'Symbol', 'Start', 'Stop', 'Strand'])
-        contig_ice = ice_df[ice_df['Contig'].astype(str).str.split().str[0] == cid]
+    if not ice_df.empty:
+        contig_ice = ice_df[ice_df['Contig'].astype(str).str.split().str[0] == cid_clean]
+        if contig_ice.empty:
+            # Bakta renames contigs — fall back: assign to this record if it
+            # is the largest (first) contig, since MacSyFinder ran on the same
+            # assembly before renaming
+            contig_ice = ice_df
+
         for _, row in contig_ice.iterrows():
             s      = (float(row['Start']) / gl) * two_pi
             e      = (float(row['Stop'])  / gl) * two_pi
             mid    = (s + e) / 2
             strand = str(row['Strand']).strip()
+            size_kb = (float(row['Stop']) - float(row['Start'])) / 1000
+
+            # Scaled arc proportional to actual bp span
             ax.plot(np.linspace(s, e, 100), [0.85] * 100,
-                    color='#00f2ff', lw=8, alpha=0.85,
+                    color='#00f2ff', lw=8, alpha=0.9,
                     solid_capstyle='butt', zorder=9)
-            arrow_offset = 0.012 if strand == '+' else -0.012
+
+            # Directional arrow at midpoint
+            arrow_offset = 0.015 if strand == '+' else -0.015
             ax.annotate('',
-                        xy=(mid + arrow_offset, 0.85), xytext=(mid, 0.85),
-                        arrowprops=dict(arrowstyle='->', color='#006080', lw=1.5),
+                        xy=(mid + arrow_offset, 0.85),
+                        xytext=(mid, 0.85),
+                        arrowprops=dict(arrowstyle='->', color='#006080', lw=2.0),
                         zorder=10)
-            ax.text(mid, 0.93, str(row['Symbol']).replace('_', ' '),
-                    ha='center', va='bottom', fontsize=6,
+
+            # Label with system name and size
+            label_text = f"{str(row['Symbol']).replace('_', ' ')}\n{size_kb:.1f} kb"
+            ax.text(mid, 0.94, label_text,
+                    ha='center', va='bottom', fontsize=6.5,
                     color='#006080', fontweight='bold',
-                    path_effects=[pe.withStroke(linewidth=1.5, foreground='white')],
+                    path_effects=[pe.withStroke(linewidth=2, foreground='white')],
                     zorder=11)
 
-    # -- AMR track (outermost ring, radius 1.05) --------------------------------
+    # AMR track (outermost ring, radius 1.05)
     ax.plot(np.linspace(0, two_pi, 200), [1.05] * 200,
             color='#edf2f7', lw=16, alpha=0.4, zorder=1)
 
-    if os.path.exists(AMR_FILE):
-        amr_df = pd.read_csv(AMR_FILE, sep='\t').fillna('nan')
-        hits   = amr_df[amr_df.iloc[:, 1].astype(str).str.split().str[0] == cid]
+    if not amr_df.empty:
+        hits = amr_df[amr_df.iloc[:, 1].astype(str).str.split().str[0] == cid_clean]
 
-        # Build arc data
         arcs = []
         for _, row in hits.iterrows():
-            color = amr_color(row.iloc[10], row.iloc[8])
-            s_rad = (float(row.iloc[2]) / gl) * two_pi
-            e_rad = (float(row.iloc[3]) / gl) * two_pi
-            arcs.append((s_rad, e_rad, (s_rad+e_rad)/2, color, str(row.iloc[5])))
+            color  = amr_color(row.iloc[10], row.iloc[8])
+            s_rad  = (float(row.iloc[2]) / gl) * two_pi
+            e_rad  = (float(row.iloc[3]) / gl) * two_pi
+            strand = str(row.iloc[6]).strip() if pd.notna(row.iloc[6]) else '+'
+            arcs.append((s_rad, e_rad, (s_rad + e_rad) / 2, color, str(row.iloc[5]), strand))
 
-        # Draw arcs
-        for s_rad, e_rad, _, color, _ in arcs:
+        for s_rad, e_rad, mid, color, name, strand in arcs:
             ax.add_patch(Polygon(
                 [(s_rad, 1.01), (s_rad, 1.09), (e_rad, 1.05)],
                 facecolor=color, zorder=10))
+            arrow_offset = 0.012 if strand == '+' else -0.012
+            ax.annotate('',
+                        xy=(mid + arrow_offset, 1.05),
+                        xytext=(mid, 1.05),
+                        arrowprops=dict(arrowstyle='->', color='white', lw=1.0),
+                        zorder=11)
 
-        # Draw labels — sorted by angle, staggered to avoid overlap
         arcs.sort(key=lambda x: x[2])
-        MIN_SEP = 0.18   # ~10° minimum angular gap between same-level labels
+        MIN_SEP = 0.18
         placed  = []
-        for s_rad, e_rad, mid, color, name in arcs:
+        for s_rad, e_rad, mid, color, name, strand in arcs:
             level = 0
             for p_ang, p_lvl in placed[-6:]:
                 dist = min(abs(mid - p_ang), two_pi - abs(mid - p_ang))
@@ -1170,10 +1174,9 @@ def draw_map(record, filename, centre_label):
                     path_effects=[pe.withStroke(linewidth=1.8, foreground='white')],
                     zorder=11)
 
-    # Centre label
     ax.text(0, 0, centre_label,
             ha='center', va='center', fontsize=11, fontweight='bold',
-            color=os.environ.get('PRIMARY_COLOR', '#1a2a3a'))
+            color='#1a2a3a')
 
     plt.savefig(os.path.join(MAP_DIR, filename),
                 dpi=300, bbox_inches='tight', transparent=True)
@@ -1181,24 +1184,39 @@ def draw_map(record, filename, centre_label):
 
 
 try:
-    records = sorted(SeqIO.parse(FA, 'fasta'),
+    # Load data once, pass into draw_map — avoids file reads inside the function
+    # and eliminates the records/cid scoping bugs
+    ice_df = pd.read_csv(ICE_FILE, sep='\t',
+                         names=['Contig', 'Symbol', 'Start', 'Stop', 'Strand']) \
+             if os.path.exists(ICE_FILE) and os.path.getsize(ICE_FILE) > 0 \
+             else pd.DataFrame()
+
+    amr_df = pd.read_csv(AMR_FILE, sep='\t').fillna('nan') \
+             if os.path.exists(AMR_FILE) \
+             else pd.DataFrame()
+
+    records = sorted(list(SeqIO.parse(FA, 'fasta')),
                      key=lambda r: len(r.seq), reverse=True)
-    records = list(records)
 
     species = os.environ.get('ASM_SPECIES_FULL', 'Assembly')
     chrom   = records[0]
     draw_map(chrom,
              filename="01_Main_Chromosome.png",
-             centre_label=f"{len(chrom.seq):,} bp\n{species}")
+             centre_label=f"{len(chrom.seq):,} bp\n{species}",
+             ice_df=ice_df,
+             amr_df=amr_df)
 
     for i, rec in enumerate(records[1:], start=1):
         draw_map(rec,
                  filename=f"{i+1:02d}_Extrachromosomal_{i}.png",
-                 centre_label=f"Extrachromosomal DNA\n{len(rec.seq)/1000:.1f} kb\n{str(rec.id).split()[0]}")
+                 centre_label=f"Extrachromosomal DNA\n{len(rec.seq)/1000:.1f} kb\n{str(rec.id).split()[0]}",
+                 ice_df=ice_df,
+                 amr_df=amr_df)
 
 except Exception as exc:
+    import traceback
     with open(os.path.join(OUTDIR, 'logs', 'viz_error.log'), 'w') as fh:
-        fh.write(str(exc))
+        fh.write(traceback.format_exc())
 PYEOF
 
 run_step "Generating Circular Maps" "true" "python3 '$VIZ_SCRIPT'"
@@ -1286,7 +1304,6 @@ run_step "Generating HTML Report" "true" "generate_html_report"
 # ==============================================================================
 #  Terminal summary
 # ==============================================================================
-echo -e "\n${BOLD}${GREEN}✔ MOSTAR completed successfully!${NC}\n"
 printf '%-18s %-24s %-24s\n' 'Metric'        'After Medaka'                  'Final'
 printf '%-18s %-24s %-24s\n' '──────────────' '────────────────────────'      '────────────────────────'
 printf '%-18s %-24s %-24s\n' 'Total Length'  "$(format_bp "$MEDAKA_LEN") bp" "$(format_bp "$FINAL_LEN") bp"

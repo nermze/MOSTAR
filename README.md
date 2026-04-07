@@ -70,25 +70,23 @@ A successful run will contain the following output, including the final polished
 ### Installation (Conda)
 The installation has been designed to be as simple as possible. The included YML will create a separate environment with all the required dependencies. The only manual step is downloading and configuring databases. 
 
-<pre>
-# Clone the repository:
-git clone https://github.com/nermze/MOSTAR.git
+```bash
+# Install micromamba for speed
+conda install micromamba
 
-# Change dir:
-cd MOSTAR
+# Download the repository
+git clone https://github.com/nermze/mostar.git
 
-# Create a conda env with all dependencies from the provided yml:
-conda env create -f environment.yml
+# Change to MOSTAR dir
+cd mostar
 
-# Activate the environment:
-conda activate mostar-env
+# Create env and install using micromamba
+micromamba env create -f environment.yml -v
+micromamba activate mostar_env
 
-# Install using pip:
-pip install . 
-
-# Run MOSTAR and display help text
-mostar -h
-</pre>
+# Test the install
+mostar --help
+```
 
 #### Setup and download Databases
 <pre> 

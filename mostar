@@ -57,7 +57,7 @@ BAKTA_DB=""
 BAKTA_COMPLETE=""
 BAKTA_REGIONS=""
 KRAKEN2_DB=""
-KRAKEN_CONFIDENCE="0.1"
+KRAKEN_CONFIDENCE="0.01"
 GENOMAD_DB="$HOME/genomad_db"
 USE_META=""
 CLEANUP=false
@@ -813,10 +813,7 @@ fi
 if [[ "$RUN_KRAKEN2" == "true" ]]; then
     mkdir -p "$OUTDIR/taxonomy"
     run_step "Taxonomy (Kraken2)" "true" \
-    "kraken2 --db '$KRAKEN2_DB' --threads $THREADS \
-    --confidence '$KRAKEN_CONFIDENCE' \
-    --report '$KRAKEN_REPORT' '$FINAL_ASM' \
-    >/dev/null 2>&1"
+        "kraken2 --db '$KRAKEN2_DB' --threads $THREADS --confidence '$KRAKEN_CONFIDENCE' --report '$KRAKEN_REPORT' '$FINAL_ASM' >/dev/null 2>&1"
 
     if [[ -s "$KRAKEN_REPORT" ]]; then
         TOP_HIT=$(awk -F'\t' '$4 ~ /^S/' "$KRAKEN_REPORT" | sort -k1,1nr | head -n1 || true)
@@ -861,6 +858,8 @@ run_step "AMR Profiling (AMRFinder+)" "true" \
 # ==============================================================================
 #  Step 10 — ICE Detection (MacSyFinder / CONJScan)  [optional]
 # ==============================================================================
+ICE_FILE="$OUTDIR/amr_results/ICE_locations.tmp"
+
 if [[ "$RUN_ICE" == "true" ]]; then
     P_FILE=$(ls "$OUTDIR/annotation/"*.faa 2>/dev/null | head -n1 || true)
     if [[ -f "$P_FILE" ]]; then
@@ -881,13 +880,12 @@ else
 fi
 
 # Parse MacSyFinder output → ICE_locations.tmp (used by the circular map)
-ICE_FILE="$OUTDIR/amr_results/ICE_locations.tmp"
 if [[ "$RUN_ICE" == "true" && -d "$OUTDIR/ice_detection" ]]; then
     BEST_SOL=$(find "$OUTDIR/ice_detection" -name "best_solution.tsv"         2>/dev/null | head -n1 || true)
     BEST_SUM=$(find "$OUTDIR/ice_detection" -name "best_solution_summary.tsv" 2>/dev/null | head -n1 || true)
 
     if [[ -f "$BEST_SUM" && -f "$BEST_SOL" ]]; then
-        # Updated Step 10: Mapping ICE to REAL genomic coordinates
+
 python3 - <<PYICE
 import os, pandas as pd, re
 from io import StringIO
@@ -937,9 +935,14 @@ PYICE
     fi
 fi    
 
+
 # ==============================================================================
 #  Step 11 — Genomic Plasticity (geNomad)  [optional]
 # ==============================================================================
+PHAGE_FILE="$OUTDIR/amr_results/prophage_locations.tmp"
+export PHAGE_FILE
+: > "$PHAGE_FILE"
+
 if [[ "$RUN_GENOMAD" == "true" ]]; then
     run_step "Plasticity (geNomad)" "true" \
         "genomad end-to-end \
@@ -990,9 +993,27 @@ PYCOUNT
         fi
     fi
 
-    # Provirus / prophage stats
+    # Prophage stats & map coordinate extraction
     if [[ -f "$V_SUMM" ]]; then
         PHAGE_COUNT=$(awk 'NR>1' "$V_SUMM" | wc -l | xargs)
+        
+        # Parse coordinates for the circular map (Replaces the broken awk line)
+        python3 - <<PYPHAGE_MAP
+import pandas as pd, os
+df = pd.read_csv('$V_SUMM', sep='\t')
+out_rows = []
+for _, r in df.iterrows():
+    # Split geNomad "start-end" string
+    coords = str(r['coordinates']).split('-')
+    start = coords[0] if len(coords) > 1 else 1
+    end = coords[1] if len(coords) > 1 else r['length']
+    contig = str(r['seq_name']).split('|')[0].split()[0]
+    out_rows.append([contig, "Prophage", start, end, "+"])
+if out_rows:
+    pd.DataFrame(out_rows).to_csv(os.environ['PHAGE_FILE'], sep='\t', index=False, header=False)
+PYPHAGE_MAP
+
+        # JS data for the HTML report
         PHAGE_JS_DATA=$(python3 - <<PYPHAGE
 import pandas as pd, json
 df = pd.read_csv('$V_SUMM', sep='\t')
@@ -1015,7 +1036,8 @@ fi
 export OUTDIR FINAL_ASM ASM_SPECIES_FULL \
        AMR_FILE="$OUTDIR/amr_results/AMR_Report.tsv" \
        MAP_DIR="$OUTDIR/amr_results/maps" \
-       ICE_FILE="$OUTDIR/amr_results/ICE_locations.tmp"
+       ICE_FILE="$OUTDIR/amr_results/ICE_locations.tmp" \
+       PHAGE_FILE="$OUTDIR/amr_results/prophage_locations.tmp"
 
 VIZ_SCRIPT="$OUTDIR/intermediate/generate_maps.py"
 
@@ -1036,6 +1058,7 @@ FA       = os.environ['FINAL_ASM']
 AMR_FILE = os.environ['AMR_FILE']
 MAP_DIR  = os.environ['MAP_DIR']
 ICE_FILE = os.environ['ICE_FILE']
+PHAGE_FILE = os.environ['PHAGE_FILE']
 os.makedirs(MAP_DIR, exist_ok=True)
 
 
@@ -1052,7 +1075,7 @@ def amr_color(amr_class, amr_type="AMR"):
     return '#2c3e50'
 
 
-def draw_map(record, filename, centre_label, ice_df, amr_df):
+def draw_map(record, filename, centre_label, ice_df, phage_df, amr_df, is_main=False):
     gl        = len(record.seq)
     cid_clean = str(record.id).split()[0]
     two_pi    = 2 * np.pi
@@ -1094,39 +1117,62 @@ def draw_map(record, filename, centre_label, ice_df, amr_df):
 
     if not ice_df.empty:
         contig_ice = ice_df[ice_df['Contig'].astype(str).str.split().str[0] == cid_clean]
-        if contig_ice.empty:
-            # Bakta renames contigs — fall back: assign to this record if it
-            # is the largest (first) contig, since MacSyFinder ran on the same
-            # assembly before renaming
+        if contig_ice.empty and record == records[0]:
             contig_ice = ice_df
 
         for _, row in contig_ice.iterrows():
-            s      = (float(row['Start']) / gl) * two_pi
-            e      = (float(row['Stop'])  / gl) * two_pi
-            mid    = (s + e) / 2
+            s = (float(row['Start']) / gl) * two_pi
+            e = (float(row['Stop'])  / gl) * two_pi
+            mid = (s + e) / 2
             strand = str(row['Strand']).strip()
             size_kb = (float(row['Stop']) - float(row['Start'])) / 1000
 
-            # Scaled arc proportional to actual bp span
+            # ICE arc
             ax.plot(np.linspace(s, e, 100), [0.85] * 100,
                     color='#00f2ff', lw=8, alpha=0.9,
                     solid_capstyle='butt', zorder=9)
 
-            # Directional arrow at midpoint
-            arrow_offset = 0.015 if strand == '+' else -0.015
+            # Arrow
+            arrow_offset = -0.020 if strand == '+' else 0.020
             ax.annotate('',
                         xy=(mid + arrow_offset, 0.85),
                         xytext=(mid, 0.85),
                         arrowprops=dict(arrowstyle='->', color='#006080', lw=2.0),
                         zorder=10)
 
-            # Label with system name and size
+            # ICE label
             label_text = f"{str(row['Symbol']).replace('_', ' ')}\n{size_kb:.1f} kb"
             ax.text(mid, 0.94, label_text,
                     ha='center', va='bottom', fontsize=6.5,
                     color='#006080', fontweight='bold',
                     path_effects=[pe.withStroke(linewidth=2, foreground='white')],
                     zorder=11)
+
+    # Prophage integration 
+    if not phage_df.empty:
+        contig_phage = phage_df[phage_df['Contig'].astype(str).str.split().str[0] == cid_clean]
+
+        if contig_phage.empty and is_main:
+            contig_phage = phage_df
+
+        for _, row in contig_phage.iterrows():
+            s = (float(row['Start']) / gl) * two_pi
+            e = (float(row['Stop'])  / gl) * two_pi
+            mid = (s + e) / 2
+            size_kb = (float(row['Stop']) - float(row['Start'])) / 1000
+
+            color = '#e74c3c'
+
+            ax.plot(np.linspace(s, e, 100), [0.865] * 100,
+                    color=color, lw=8, alpha=0.85,
+                    solid_capstyle='butt', zorder=8)
+
+            label_text = f"Prophage\n{size_kb:.1f} kb"
+            ax.text(mid, 0.78, label_text,
+                    ha='center', va='top', fontsize=6.0,
+                    color=color,
+                    path_effects=[pe.withStroke(linewidth=2, foreground='white')],
+                    zorder=9)
 
     # AMR track (outermost ring, radius 1.05)
     ax.plot(np.linspace(0, two_pi, 200), [1.05] * 200,
@@ -1144,15 +1190,17 @@ def draw_map(record, filename, centre_label, ice_df, amr_df):
             arcs.append((s_rad, e_rad, (s_rad + e_rad) / 2, color, str(row.iloc[5]), strand))
 
         for s_rad, e_rad, mid, color, name, strand in arcs:
-            ax.add_patch(Polygon(
-                [(s_rad, 1.01), (s_rad, 1.09), (e_rad, 1.05)],
-                facecolor=color, zorder=10))
-            arrow_offset = 0.012 if strand == '+' else -0.012
+            ax.plot(np.linspace(s_rad, e_rad, 100), [1.05] * 100,
+                    color=color, lw=12, solid_capstyle='butt', zorder=10)
+
+        arrow_offset = -0.012 if strand == '+' else 0.012
+            
             ax.annotate('',
                         xy=(mid + arrow_offset, 1.05),
                         xytext=(mid, 1.05),
-                        arrowprops=dict(arrowstyle='->', color='white', lw=1.0),
+                        arrowprops=dict(arrowstyle='->', color='white', lw=1.5),
                         zorder=11)
+
 
         arcs.sort(key=lambda x: x[2])
         MIN_SEP = 0.18
@@ -1184,12 +1232,15 @@ def draw_map(record, filename, centre_label, ice_df, amr_df):
 
 
 try:
-    # Load data once, pass into draw_map — avoids file reads inside the function
-    # and eliminates the records/cid scoping bugs
     ice_df = pd.read_csv(ICE_FILE, sep='\t',
                          names=['Contig', 'Symbol', 'Start', 'Stop', 'Strand']) \
              if os.path.exists(ICE_FILE) and os.path.getsize(ICE_FILE) > 0 \
              else pd.DataFrame()
+
+    phage_df = pd.read_csv(PHAGE_FILE, sep='\t',
+                       names=['Contig', 'Start', 'Stop', 'Score']) \
+           if os.path.exists(PHAGE_FILE) and os.path.getsize(PHAGE_FILE) > 0 \
+           else pd.DataFrame()
 
     amr_df = pd.read_csv(AMR_FILE, sep='\t').fillna('nan') \
              if os.path.exists(AMR_FILE) \
@@ -1201,17 +1252,21 @@ try:
     species = os.environ.get('ASM_SPECIES_FULL', 'Assembly')
     chrom   = records[0]
     draw_map(chrom,
-             filename="01_Main_Chromosome.png",
-             centre_label=f"{len(chrom.seq):,} bp\n{species}",
-             ice_df=ice_df,
-             amr_df=amr_df)
+            filename="01_Main_Chromosome.png",
+            centre_label=f"{len(chrom.seq):,} bp\n{species}",
+            ice_df=ice_df,
+            phage_df=phage_df,
+            amr_df=amr_df,
+            is_main=True)
 
     for i, rec in enumerate(records[1:], start=1):
         draw_map(rec,
-                 filename=f"{i+1:02d}_Extrachromosomal_{i}.png",
-                 centre_label=f"Extrachromosomal DNA\n{len(rec.seq)/1000:.1f} kb\n{str(rec.id).split()[0]}",
-                 ice_df=ice_df,
-                 amr_df=amr_df)
+                filename=f"{i+1:02d}_Extrachromosomal_{i}.png",
+                centre_label=f"Extrachromosomal DNA\n{len(rec.seq)/1000:.1f} kb\n{str(rec.id).split()[0]}",
+                ice_df=ice_df,
+                phage_df=phage_df,
+                amr_df=amr_df,
+                is_main=False)
 
 except Exception as exc:
     import traceback

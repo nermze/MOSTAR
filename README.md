@@ -84,6 +84,9 @@ cd mostar
 micromamba env create -f environment.yml -v
 micromamba activate mostar_env
 
+# To avoid depedency issues, install geNomad separatly
+micromamba install -c conda-forge -c bioconda genomad
+
 # Test the install
 mostar --help
 ```

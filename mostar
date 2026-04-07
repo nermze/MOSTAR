@@ -1179,6 +1179,7 @@ def draw_map(record, filename, centre_label, ice_df, phage_df, amr_df, is_main=F
             color='#edf2f7', lw=16, alpha=0.4, zorder=1)
 
     if not amr_df.empty:
+        # Filter for the current contig
         hits = amr_df[amr_df.iloc[:, 1].astype(str).str.split().str[0] == cid_clean]
 
         arcs = []
@@ -1189,18 +1190,19 @@ def draw_map(record, filename, centre_label, ice_df, phage_df, amr_df, is_main=F
             strand = str(row.iloc[6]).strip() if pd.notna(row.iloc[6]) else '+'
             arcs.append((s_rad, e_rad, (s_rad + e_rad) / 2, color, str(row.iloc[5]), strand))
 
+        # DRAW BLOCKS + INTERIOR ARROWS
         for s_rad, e_rad, mid, color, name, strand in arcs:
+            # 1. Draw the thick colored block
             ax.plot(np.linspace(s_rad, e_rad, 100), [1.05] * 100,
                     color=color, lw=12, solid_capstyle='butt', zorder=10)
 
-        arrow_offset = -0.012 if strand == '+' else 0.012
-            
+            # 2. Add the tiny white arrow inside (perfectly aligned indentation)
+            arrow_offset = -0.012 if strand == '+' else 0.012
             ax.annotate('',
                         xy=(mid + arrow_offset, 1.05),
                         xytext=(mid, 1.05),
                         arrowprops=dict(arrowstyle='->', color='white', lw=1.5),
                         zorder=11)
-
 
         arcs.sort(key=lambda x: x[2])
         MIN_SEP = 0.18

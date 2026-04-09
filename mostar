@@ -37,7 +37,7 @@ readonly GREEN='\033[0;32m'
 readonly NC='\033[0m'
 
 # Progress tracking
-TOTAL_STEPS=13
+TOTAL_STEPS=14
 CURRENT_STEP=0
 
 # ------------------------------------------------------------------------------
@@ -212,7 +212,7 @@ Annotation:
   --complete      Tell Bakta all sequences are complete/circular
 
 Classification:
-  --kraken-db     Path to Kraken2 database
+  --kraken2-db     Path to Kraken2 database
   --confidence    Kraken2 confidence threshold [Default: 0.1]
   --emu-db        Path to EMU database — enables 16S classification
 
@@ -276,7 +276,7 @@ def row_color(cls):
     if 'aminoglycoside'  in c: return '#8e44ad'
     if any(x in c for x in ['macrolide', 'lincosamide', 'streptogramin']): return '#f1c40f'
     if 'quinolone' in c or 'fluoroquinolone' in c: return '#27ae60'
-    if 'virulence' in c: return '#000000'
+    if 'virulence' in c: return '#e74c3c'
     return '#2c3e50'
 
 df = pd.read_csv(sys.argv[1], sep='\t')
@@ -497,7 +497,8 @@ ${METRICS_BLOCK}
         <div class="legend-item"><div class="swatch" style="background:#27ae60;"></div>Quinolones</div>
         <div class="legend-item"><div class="swatch" style="background:#00f2ff; border-color:#aaa;"></div>ICE / Mobilome</div>
         <div class="legend-item"><div class="swatch" style="background:#2c3e50;"></div>Other AMR</div>
-        <div class="legend-item"><div class="swatch" style="background:#000000;"></div>Virulence</div>
+        <div class="legend-item"><div class="swatch" style="background:#e74c3c;"></div>Virulence / High-risk</div>
+        <div class="legend-item"><div class="swatch" style="background:#2e7d32;"></div>Prophage</div>
     </div>
 </div>
 
@@ -550,7 +551,7 @@ ${full_amr_section}
             else if (c.includes('aminoglycoside'))                      color = '#8e44ad';
             else if (c.includes('macrolide'))                           color = '#f1c40f';
             else if (c.includes('quinolone'))                           color = '#27ae60';
-            else if (c.includes('virulence'))                           color = '#000000';
+            else if (c.includes('virulence'))                           color = '#e74c3c';
 
             const tr = document.createElement('tr');
             tr.innerHTML =
@@ -607,7 +608,7 @@ while [[ $# -gt 0 ]]; do
         --bakta-db|-b)      BAKTA_DB="$2";                 shift 2 ;;
         --bakta-ref|-a)     BAKTA_REGIONS="$2";            shift 2 ;;
         --complete|-i)      BAKTA_COMPLETE="--complete";   shift 1 ;;
-        --kraken-db|-k)     KRAKEN2_DB="$2"; RUN_KRAKEN2=true; shift 2 ;;
+        --kraken2-db|-k)     KRAKEN2_DB="$2"; RUN_KRAKEN2=true; shift 2 ;;
         --confidence|-c)    KRAKEN_CONFIDENCE="$2";        shift 2 ;;
         --emu-db|-e)        EMU_DB="$2";                   shift 2 ;;
         --ice|-I)           RUN_ICE=true;                  shift 1 ;;
@@ -816,9 +817,17 @@ if [[ "$RUN_KRAKEN2" == "true" ]]; then
         "kraken2 --db '$KRAKEN2_DB' --threads $THREADS --confidence '$KRAKEN_CONFIDENCE' --report '$KRAKEN_REPORT' '$FINAL_ASM' >/dev/null 2>&1"
 
     if [[ -s "$KRAKEN_REPORT" ]]; then
-        TOP_HIT=$(awk -F'\t' '$4 ~ /^S/' "$KRAKEN_REPORT" | sort -k1,1nr | head -n1 || true)
+        # Prefer Subspecies/Strain (S1, S2...) if available
+        TOP_HIT=$(awk -F'\t' '$4 ~ /^S[0-9]+/' "$KRAKEN_REPORT" | sort -k1,1nr | head -n1 || true)
+        
+        # Fallback to general Species (S)
+        [[ -z "$TOP_HIT" ]] && \
+            TOP_HIT=$(awk -F'\t' '$4 == "S"' "$KRAKEN_REPORT" | sort -k1,1nr | head -n1 || true)
+            
+        # Fallback to Genus (G)
         [[ -z "$TOP_HIT" ]] && \
             TOP_HIT=$(awk -F'\t' '$4 == "G"' "$KRAKEN_REPORT" | sort -k1,1nr | head -n1 || true)
+            
         [[ -n "$TOP_HIT" ]] && \
             ASM_SPECIES_FULL=$(echo "$TOP_HIT" | cut -f6- | sed 's/^[[:space:]]*//')
     fi
@@ -997,7 +1006,7 @@ PYCOUNT
     if [[ -f "$V_SUMM" ]]; then
         PHAGE_COUNT=$(awk 'NR>1' "$V_SUMM" | wc -l | xargs)
         
-        # Parse coordinates for the circular map (Replaces the broken awk line)
+        # Parse coordinates for the circular map
         python3 - <<PYPHAGE_MAP
 import pandas as pd, os
 df = pd.read_csv('$V_SUMM', sep='\t')
@@ -1008,7 +1017,7 @@ for _, r in df.iterrows():
     start = coords[0] if len(coords) > 1 else 1
     end = coords[1] if len(coords) > 1 else r['length']
     contig = str(r['seq_name']).split('|')[0].split()[0]
-    out_rows.append([contig, "Prophage", start, end, "+"])
+    out_rows.append([contig, start, end, r.get('virus_score', 0), "+"])
 if out_rows:
     pd.DataFrame(out_rows).to_csv(os.environ['PHAGE_FILE'], sep='\t', index=False, header=False)
 PYPHAGE_MAP
@@ -1037,7 +1046,8 @@ export OUTDIR FINAL_ASM ASM_SPECIES_FULL \
        AMR_FILE="$OUTDIR/amr_results/AMR_Report.tsv" \
        MAP_DIR="$OUTDIR/amr_results/maps" \
        ICE_FILE="$OUTDIR/amr_results/ICE_locations.tmp" \
-       PHAGE_FILE="$OUTDIR/amr_results/prophage_locations.tmp"
+       PHAGE_FILE="$OUTDIR/amr_results/prophage_locations.tmp" \
+       MOB_FILE="$OUTDIR/intermediate/mob_sum.csv"
 
 VIZ_SCRIPT="$OUTDIR/intermediate/generate_maps.py"
 
@@ -1051,7 +1061,11 @@ import matplotlib.pyplot as plt
 import matplotlib.patheffects as pe
 from matplotlib.patches import Polygon
 from Bio import SeqIO
-from Bio.SeqUtils import gc_fraction
+
+# Robust GC calculator that completely avoids BioPython version compatibility issues
+def calc_gc(seq):
+    s = str(seq).upper()
+    return (s.count('G') + s.count('C')) / max(1, len(s))
 
 OUTDIR   = os.environ['OUTDIR']
 FA       = os.environ['FINAL_ASM']
@@ -1059,10 +1073,24 @@ AMR_FILE = os.environ['AMR_FILE']
 MAP_DIR  = os.environ['MAP_DIR']
 ICE_FILE = os.environ['ICE_FILE']
 PHAGE_FILE = os.environ['PHAGE_FILE']
+MOB_FILE = os.environ.get('MOB_FILE', '')
+
 os.makedirs(MAP_DIR, exist_ok=True)
 
+# 1. Load high-risk mobile genes
+high_risk_genes = set()
+if os.path.exists(MOB_FILE) and os.path.getsize(MOB_FILE) > 0:
+    try:
+        m_df = pd.read_csv(MOB_FILE)
+        # Score is last column (iloc[:, -1]) and gene name is iloc[:, 5]
+        high_risk_genes = set(m_df[m_df.iloc[:, -1] >= 0.8].iloc[:, 5].astype(str))
+    except Exception:
+        pass
 
-def amr_color(amr_class, amr_type="AMR"):
+
+def amr_color(amr_class, amr_type="AMR", gene_name=""):
+    if gene_name in high_risk_genes: return '#e74c3c' # High-risk mobile AMR
+    
     c = str(amr_class).lower()
     t = str(amr_type).lower()
     if any(x in c for x in ['beta-lactam', 'penicillin', 'carbapenem']): return '#3498db'
@@ -1070,7 +1098,7 @@ def amr_color(amr_class, amr_type="AMR"):
     if 'aminoglycoside' in c: return '#8e44ad'
     if any(x in c for x in ['macrolide', 'lincosamide', 'streptogramin']): return '#f1c40f'
     if 'quinolone' in c or 'fluoroquinolone' in c: return '#27ae60'
-    if 'virulence' in c or t == 'virulence': return '#000000'
+    if 'virulence' in c or t == 'virulence': return '#e74c3c'
     if 'ice' in c or 'conjugation' in c:    return '#00f2ff'
     return '#2c3e50'
 
@@ -1083,7 +1111,7 @@ def draw_map(record, filename, centre_label, ice_df, phage_df, amr_df, is_main=F
     fig = plt.figure(figsize=(10, 10))
     ax  = fig.add_subplot(111, projection='polar')
     ax.set_theta_zero_location('N')
-    ax.set_theta_direction(-1)
+    ax.set_theta_direction(-1)  # Clockwise direction
     ax.spines['polar'].set_visible(False)
     ax.set_xticklabels([])
     ax.set_yticklabels([])
@@ -1103,7 +1131,7 @@ def draw_map(record, filename, centre_label, ice_df, phage_df, amr_df, is_main=F
 
     # GC content (innermost ring, radius ~0.70)
     step     = max(1, gl // 500)
-    gc_vals  = np.array([gc_fraction(record.seq[j:j+step]) for j in range(0, gl, step)])
+    gc_vals  = np.array([calc_gc(record.seq[j:j+step]) for j in range(0, gl, step)])
     theta_gc = np.linspace(0, two_pi, len(gc_vals))
     avg_gc   = np.mean(gc_vals)
     ax.fill_between(theta_gc,
@@ -1132,12 +1160,12 @@ def draw_map(record, filename, centre_label, ice_df, phage_df, amr_df, is_main=F
                     color='#00f2ff', lw=8, alpha=0.9,
                     solid_capstyle='butt', zorder=9)
 
-            # Arrow
-            arrow_offset = -0.020 if strand == '+' else 0.020
+            # Arrow indicating direction
+            arrow_offset = 0.025 if strand == '+' else -0.025 
             ax.annotate('',
                         xy=(mid + arrow_offset, 0.85),
                         xytext=(mid, 0.85),
-                        arrowprops=dict(arrowstyle='->', color='#006080', lw=2.0),
+                        arrowprops=dict(arrowstyle='-|>', color='#006080', lw=1.2, mutation_scale=16),
                         zorder=10)
 
             # ICE label
@@ -1161,7 +1189,7 @@ def draw_map(record, filename, centre_label, ice_df, phage_df, amr_df, is_main=F
             mid = (s + e) / 2
             size_kb = (float(row['Stop']) - float(row['Start'])) / 1000
 
-            color = '#e74c3c'
+            color = '#2e7d32'
 
             ax.plot(np.linspace(s, e, 100), [0.865] * 100,
                     color=color, lw=8, alpha=0.85,
@@ -1184,24 +1212,32 @@ def draw_map(record, filename, centre_label, ice_df, phage_df, amr_df, is_main=F
 
         arcs = []
         for _, row in hits.iterrows():
-            color  = amr_color(row.iloc[10], row.iloc[8])
+            gene_name = str(row.iloc[5]) 
+            color  = amr_color(row.iloc[10], row.iloc[8], gene_name) 
             s_rad  = (float(row.iloc[2]) / gl) * two_pi
             e_rad  = (float(row.iloc[3]) / gl) * two_pi
-            strand = str(row.iloc[6]).strip() if pd.notna(row.iloc[6]) else '+'
-            arcs.append((s_rad, e_rad, (s_rad + e_rad) / 2, color, str(row.iloc[5]), strand))
+            # Safe strand parsing (column 4 is Strand in AMRFinder+)
+            strand = str(row.iloc[4]).strip() if pd.notna(row.iloc[4]) else '+'
+            arcs.append((s_rad, e_rad, (s_rad + e_rad) / 2, color, gene_name, strand))
 
-        # DRAW BLOCKS + INTERIOR ARROWS
+        # DRAW BLOCKS + EXTENDING ARROWS
         for s_rad, e_rad, mid, color, name, strand in arcs:
             # 1. Draw the thick colored block
             ax.plot(np.linspace(s_rad, e_rad, 100), [1.05] * 100,
                     color=color, lw=12, solid_capstyle='butt', zorder=10)
 
-            # 2. Add the tiny white arrow inside (perfectly aligned indentation)
-            arrow_offset = -0.012 if strand == '+' else 0.012
+            # 2. Add an arrowhead extending from the block to show direction
+            if strand == '+':
+                start_theta = e_rad
+                end_theta   = e_rad + 0.030
+            else:
+                start_theta = s_rad
+                end_theta   = s_rad - 0.030
+
             ax.annotate('',
-                        xy=(mid + arrow_offset, 1.05),
-                        xytext=(mid, 1.05),
-                        arrowprops=dict(arrowstyle='->', color='white', lw=1.5),
+                        xy=(end_theta, 1.05),
+                        xytext=(start_theta, 1.05),
+                        arrowprops=dict(arrowstyle='-|>', color=color, lw=1.2, mutation_scale=18),
                         zorder=11)
 
         arcs.sort(key=lambda x: x[2])
@@ -1240,7 +1276,7 @@ try:
              else pd.DataFrame()
 
     phage_df = pd.read_csv(PHAGE_FILE, sep='\t',
-                       names=['Contig', 'Start', 'Stop', 'Score']) \
+                       names=['Contig', 'Start', 'Stop', 'Score', 'Strand']) \
            if os.path.exists(PHAGE_FILE) and os.path.getsize(PHAGE_FILE) > 0 \
            else pd.DataFrame()
 
@@ -1253,18 +1289,21 @@ try:
 
     species = os.environ.get('ASM_SPECIES_FULL', 'Assembly')
     chrom   = records[0]
+    chrom_gc = calc_gc(chrom.seq) * 100 
+    
     draw_map(chrom,
             filename="01_Main_Chromosome.png",
-            centre_label=f"{len(chrom.seq):,} bp\n{species}",
+            centre_label=f"{len(chrom.seq):,} bp\nGC: {chrom_gc:.1f}%\n{species}", 
             ice_df=ice_df,
             phage_df=phage_df,
             amr_df=amr_df,
             is_main=True)
 
     for i, rec in enumerate(records[1:], start=1):
+        rec_gc = calc_gc(rec.seq) * 100 
         draw_map(rec,
                 filename=f"{i+1:02d}_Extrachromosomal_{i}.png",
-                centre_label=f"Extrachromosomal DNA\n{len(rec.seq)/1000:.1f} kb\n{str(rec.id).split()[0]}",
+                centre_label=f"Extrachromosomal DNA\n{len(rec.seq)/1000:.1f} kb\nGC: {rec_gc:.1f}%\n{str(rec.id).split()[0]}",
                 ice_df=ice_df,
                 phage_df=phage_df,
                 amr_df=amr_df,
@@ -1295,11 +1334,8 @@ else
 fi
 
 if [[ -f "$FINAL_ASM" && -s "$FINAL_ASM" ]]; then
-    FINAL_LEN=$(grep -v "^>" "$FINAL_ASM" | tr -d '[:space:]' | wc -c | awk '{print $1}')
-    FINAL_CNT=$(grep -c "^>" "$FINAL_ASM")
-    FINAL_N50=$(grep -v "^>" "$FINAL_ASM" | awk '{print length}' | sort -nr \
-                | awk -v t="$FINAL_LEN" '{s+=$1; if(t>0 && s>=t/2){print $1; exit}}') \
-               || FINAL_N50=0
+    read -r FINAL_LEN FINAL_CNT FINAL_N50 _F_L50 \
+        <<< "$(calc_assembly_stats "$FINAL_ASM")"
     FINAL_LEN=${FINAL_LEN:-0}
     FINAL_CNT=${FINAL_CNT:-0}
     FINAL_N50=${FINAL_N50:-0}
@@ -1357,6 +1393,16 @@ METRICS_BLOCK="<div class='card'>
 #  Step 13 — HTML Report
 # ==============================================================================
 run_step "Generating HTML Report" "true" "generate_html_report"
+
+# ==============================================================================
+#  Step 14 — Cleanup Intermediate Files (Optional)
+# ==============================================================================
+if [[ "$CLEANUP" == "true" ]]; then
+    run_step "Cleaning up intermediate files" "true" \
+        "rm -rf '$OUTDIR/intermediate' '$OUTDIR/amr_results/ICE_locations.tmp' '$OUTDIR/amr_results/prophage_locations.tmp'"
+else
+    run_step "Cleaning up intermediate files" "false" ""
+fi
 
 # ==============================================================================
 #  Terminal summary

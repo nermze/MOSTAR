@@ -192,29 +192,29 @@ mostar --ont ont_read.fastq.gz --r1 read1.fastq.gz --r2 read2.fastq.gz \
 #### Species ID and QC-metrics for assembly
 The report features key run-metrics, including assembly statistics and number of contigs. The report is dynamic and will adapt to user input, as some of the tools like taxonomy and short-read polishing are optional.  
 <p align="left">
-  <img src="assets/Run_statistics.jpg" 
+  <img src="assets/Run_statistics.png" 
        width="80%" alt="QC-Metrics">
 </p>
 
 #### Genome visualization
 The report will also draw interactive genome maps, with visualizagion of AMR-gene locations, direction, detected ICE, and GC-content. 
 <p align="left">
-  <img src="assets/AMR_and_Genome_visualization.png" 
+  <img src="assets/Multiple_contigs.png" 
        width="80%" alt="Circular Genome Visualization">
 </p>
 
 #### Integrative Conjugative Elements (ICE)
 If ICE detection has been enabled, the pipeline will extract coordinates from the annotation file, and display the results. 
 <p align="left">
-  <img src="assets/ICE_visual.png" 
-       width="50%" alt="Circular Genome Visualization">
+  <img src="assets/CE_detection.png" 
+       width="80%" alt="Circular Genome Visualization">
 </p>
 
 #### AMR+ Summary Table
 Finaly the report willl also feature a detailed AMR table.  
-<p align="center">
-  <img src="assets/AMR_Summary_table.png" 
-       width="100%" alt="AMR summary table">
+<p align="left">
+  <img src="assets/AMR_table.png" 
+       width="80%" alt="AMR summary table">
 </p>
 
 

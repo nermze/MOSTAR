@@ -206,7 +206,7 @@ The report will also draw interactive genome maps, with visualizagion of AMR-gen
 #### Integrative Conjugative Elements (ICE)
 If ICE detection has been enabled, the pipeline will extract coordinates from the annotation file, and display the results. 
 <p align="left">
-  <img src="assets/CE_detection.png" 
+  <img src="assets/ICE_detection.png" 
        width="80%" alt="Circular Genome Visualization">
 </p>
 

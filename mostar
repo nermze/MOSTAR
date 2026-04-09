@@ -1222,23 +1222,40 @@ def draw_map(record, filename, centre_label, ice_df, phage_df, amr_df, is_main=F
 
         # DRAW BLOCKS + EXTENDING ARROWS
         for s_rad, e_rad, mid, color, name, strand in arcs:
-            # 1. Draw the thick colored block
+            angular_len = abs(e_rad - s_rad)
+
+            # Draw the thick colored block
             ax.plot(np.linspace(s_rad, e_rad, 100), [1.05] * 100,
                     color=color, lw=12, solid_capstyle='butt', zorder=10)
 
-            # 2. Add an arrowhead extending from the block to show direction
-            if strand == '+':
-                start_theta = e_rad
-                end_theta   = e_rad + 0.030
-            else:
-                start_theta = s_rad
-                end_theta   = s_rad - 0.030
+            # Dynamic arrowhead placement based on visual length
+            if angular_len > 0.02:
+                if strand == '+':
+                    start_theta = mid - 0.005
+                    end_theta   = mid + 0.005
+                else:
+                    start_theta = mid + 0.005
+                    end_theta   = mid - 0.005
 
-            ax.annotate('',
-                        xy=(end_theta, 1.05),
-                        xytext=(start_theta, 1.05),
-                        arrowprops=dict(arrowstyle='-|>', color=color, lw=1.2, mutation_scale=18),
-                        zorder=11)
+                ax.annotate('',
+                            xy=(end_theta, 1.05),
+                            xytext=(start_theta, 1.05),
+                            arrowprops=dict(arrowstyle='-|>', color='black', lw=1.5, mutation_scale=12),
+                            zorder=11)
+            else:
+                # Short gene: Extend block with an arrow of the same color
+                if strand == '+':
+                    start_theta = e_rad
+                    end_theta   = e_rad + 0.030
+                else:
+                    start_theta = s_rad
+                    end_theta   = s_rad - 0.030
+
+                ax.annotate('',
+                            xy=(end_theta, 1.05),
+                            xytext=(start_theta, 1.05),
+                            arrowprops=dict(arrowstyle='-|>', color=color, lw=1.2, mutation_scale=18),
+                            zorder=11)
 
         arcs.sort(key=lambda x: x[2])
         MIN_SEP = 0.18

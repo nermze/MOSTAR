@@ -110,7 +110,7 @@ mostar --help
 ```
 
 #### Setup and download Databases
-<pre> 
+```bash 
 # Activate env (if not activated)
 conda activate mostar-env 
   
@@ -137,11 +137,10 @@ export EMU_DATABASE_DIR=<path_to_database>
 cd ${EMU_DATABASE_DIR}
 osf -p 56uf7 fetch osfstorage/emu-prebuilt/emu.tar
 tar -xvf emu.tar
-
-</pre> 
+```
 
 ### Usage instructions & input files
-<pre>
+```bash
 # Required:
 * ONT-reads
 * Genome size 
@@ -160,15 +159,7 @@ mostar --ont ont_read.fastq.gz --r1 read1.fastq.gz --r2 read2.fastq.gz \
   --kraken2-db kraken2_db_path \
   --bakta-db db-light_path --ice \
   --genomad-db genomad_db_path --plasticity
-  
-# Tips & Notes: 
-* If model is not specified, it will default to r1041_e82_400bps_sup_v5.2.0.
-* To see all available models, type: medaka tools list_models
-* ICE detection (--ice) requires functional annotation. You must provide a Bakta database (--bakta-db) for this module to run.
-* If --kraken2-db is provided, MOSTAR automatically identifies the species and configures the appropriate AMRFinder+ point-mutation model.
-* Organism can be specified manually using the --organism flag, leave empty if unknown.
-* To view all supported organisms in NCBI AMRFinder+, type: amrfinder --list_organisms
-</pre>  
+```
 
 ### Command-Line Arguments
 |   Required   |   Tool/Name  | Description |
@@ -248,19 +239,31 @@ Finaly the report willl also feature a detailed AMR table.
 </pre>  
 
 
-# Troubleshooting and known issues
-Q: Poor or fragmented assembly
-A: Make sure to specify the correct expected genome size (--genome-size) and model (--model) example r1041.XX
+# Troubleshooting, known issues & tips
+#### Medaka Model Selection
+If --model is not specified, MOSTAR defaults to r1041_e82_400bps_sup_v5.2.0, which corresponds to R10.4.1 flowcells basecalled with the Super Accuracy model at 400 bps. This default is appropriate for most modern ONT runs but must be changed if your data was generated on a different flowcell or basecalling configuration — using the wrong model is one of the most common causes of poor polishing outcomes. To list all models available in your Medaka installation, run: hmedaka tools list_models
 
-Q: No ICE detected
-A: ICE detection requires annotation files. Make sure both --bakta-db as well as --ice are set.
- 
-Q: I have highly uneven data, will my assembly still work? 
-A: Try running the pipeline with (--meta) 
+#### ICE Detection Requires Functional Annotation
+The --ice module depends on protein sequences produced by Bakta to query the MacSyFinder CONJScan database. If --bakta-db is not provided, Bakta annotation is skipped and no .faa file will be produced, causing ICE detection to be silently bypassed. Always pair --ice with --bakta-db to ensure this module runs. If you see the warning No protein file found — skipping ICE detection, this is the cause.
 
-Q. My exact model is not accepted 
-A. You may need to downgrade medaka or install a specific version. You can do this by typing: conda install -c bioconda medaka=your_version, example medaka=2.2.0. This may however break other tools, use at own risk.  
+#### Taxonomic Classification and AMRFinder+ Point Mutation Models
+When --kraken2-db is provided, MOSTAR uses the top-confidence Kraken2 hit to identify the organism and passes it to AMRFinder+ as the --organism flag, enabling species-specific point mutation screening in addition to gene-based resistance detection. Point mutation models are only available for a subset of clinically relevant organisms. If your organism is not supported, AMRFinder+ will still run in gene-detection mode without point mutations. To see all supported organisms, run: amrfinder --list_organisms
+If you know your organism and want to override automatic detection, or if you are running without a Kraken2 database, use: --organism Klebsiella
+Leave --organism unset if the organism is unknown — AMRFinder+ will still provide a complete gene-level resistome profile.
 
+#### Uneven Coverage and Metagenome-like Assemblies
+If your assembly is fragmented, missing expected genomic features, or producing an unusually high contig count, your sample may have uneven read depth — common in direct clinical extractions, environmental samples, mixed cultures, or plasmid-enriched preps. Re-run with the --meta flag to enable Flye's uneven-coverage assembly mode, which does not assume uniform depth across the genome: mostar --ont reads.fq.gz --genome-size 5m --output outdir --meta
+Note that --meta mode disables some of Flye's coverage-based error correction, so it should only be used when standard assembly fails or produces poor results.
+
+#### Low Polypolish Coverage in Hybrid Mode
+If the hybrid polishing step reports mean read depth: 0.0x across all contigs, your Illumina reads are likely incomplete, truncated, or mismatched to the assembly. Verify your R1/R2 files are complete and correctly paired before re-running. MOSTAR validates that these files exist and are non-empty at startup, but cannot detect partially downloaded or corrupted files. Check read counts with: hecho $(( $(wc -l < R1.fastq) / 4 )) reads
+A genome of ~5 Mb requires approximately 500,000 paired reads at 100 bp for 10× Polypolish coverage.
+
+#### Output Directory Conflicts
+If the specified --output directory already exists from a previous run, MOSTAR will write into it and overwrite existing files without warning. If you want to preserve a previous result, rename the output directory before re-running or specify a new output path.
+
+#### Assembly Statistics Show Identical Medaka and Final Values
+In hybrid mode, if the Medaka and Final assembly statistics are identical, Polypolish ran but made no changes. This is expected when short-read coverage is very low (typically below 5×) and does not indicate an error. Check logs/polypolish.log to confirm — the mean read depth per contig will be reported there.
 
 # Maintainer and author
 [![GitHub](https://img.shields.io/badge/GitHub-nermze-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/nermze)

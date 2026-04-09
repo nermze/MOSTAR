@@ -176,8 +176,9 @@ mostar --ont ont_read.fastq.gz --r1 read1.fastq.gz --r2 read2.fastq.gz \
 | `--bakta-db` | Bakta | Path to Bakta database |
 | `--bakta-ref` | Bakta | Annotation reference sequence (.gff) |
 | `--complete` | Bakta | Enable if sequence is complete (circular) [Default: disabled] |
-| ICE Detection | |
+| Mobile element Detection | |
 | `--ice` | MacSyFinder | Use with --bakta-db [Default: disabled] |
+| `--plasticity` | geNomad | Plasticity and prophage tracker [Default: disabled] |
 | Classification | |
 | `--kraken2-db` | Kraken2 | Requires path to pre-built Kraken2 database" |
 | `--confidence` | Kraken2 | Kraken2 confidence threshold [Default: 0.1 |

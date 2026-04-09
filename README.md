@@ -46,22 +46,24 @@ Every MOSTAR run produces a single, portable HTML report requiring no server or 
   </div>
 </p>
 
-#### ONT-only mode:
-* Long-read quality trimming 
-* De-novo assembly
-* Long-read consensus correction
-* AMR profiling
-* Report
+#### ONT-only modee
+Long-read quality trimming (Filtlong)
+De novo assembly (Flye)
+ONT consensus polishing (Medaka)
+AMR profiling (AMRFinder+)
+Interactive HTML report
 
-#### Hybrid mode - Additional steps if short-reads are provided:
-* Short-read quality trimming
-* Mapping short reads to consensus
-* Polishing using supplied short-reads
+#### Hybrid mode — additional steps when short reads are provided
+Short-read quality trimming (Fastp)
+Short-read alignment to ONT consensus (BWA-MEM)
+Short-read polishing (Polypolish)
 
-#### Optional tools
-* Taxonomic profiling  
-* Functional annotation
-* Integrative and Conjugative Elements (ICEs)
+#### Optional modules
+Taxonomic classification (Kraken2 / EMU)
+Functional annotation (Bakta)
+ICE detection — Integrative and Conjugative Elements (MacSyFinder / CONJScan)
+Plasmid-borne AMR cross-referencing (geNomad + AMRFinder+)
+Prophage detection and localisation (geNomad)
 
 #### Output files
 A successful run will contain the following output, including the final polished fasta, HTML-report, as well as individual output files and logs from all the included tools. 

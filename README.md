@@ -17,12 +17,12 @@
 
 MOSTAR is comprehensive and complete bioinformatics pipeline for downstream analysis of whole-genome Oxford Nanopore sequencing data (ONT-reads). The pipeline constructs highly-polished genomes (using hybrid- or non-hybrid assembly), in addition to performing functional annotation, AMR profiling, ICE detection, and taxonomic classification — with built-in quality controls and an interactive HTML report. The name Mostar is inspired by the historic Stari Most (Old Bridge) of Mostar, a symbol of connection and cultural resilience.  
 
-MOSTAR has been developed and tested on *S. aureus*, *B. fragilis*, as well as *H. influenzae* strains, but will work with any bacteria, as long as the correct genome size and ONT model are specified. The pipeline contains some of the most well known tools in bioinformatics, and is designed to be a "one-stop shop" for most bacterial analysis. Finaly the pipeline provides results and log files from every included tool. 
+MOSTAR has been developed and tested on *S. aureus*, *B. fragilis*, as well as *H. influenzae* strains, but will work with any bacteria, as long as the correct genome size and ONT model are specified. The pipeline contains some of the most well known tools in bioinformatics, and is designed to be a "one-stop shop" for most bacterial analysis. Finally the pipeline provides results and log files from every included tool. 
 
 # Key features
 
 #### Hybrid-Informed Quality Control
-MOSTAR utilizes a short-read informed selection strategy. By leveraging Illumina data during the pre-processing phase, the pipeline prioritizes ONT reads with the highest k-mer consistency relative to high-accuracy short reads. This ensures the assembly begins with the most reliable long-read subset possible.
+By leveraging Illumina data during the pre-processing phase, the pipeline prioritizes ONT reads with the highest k-mer consistency relative to high-accuracy short reads. This ensures the assembly begins with the most reliable long-read subset possible.
 
 #### Mapping Genomic Plasticity
 By integrating NCBI AMRFinder+ with MacSyFinder, the pipeline identifies the physical location of resistance elements. Distinguishing between fixed chromosomal resistance and highly mobile ICE enables a more accurate assessment of horizontal gene transfer.
@@ -56,6 +56,11 @@ A successful run will contain the following output, including the final polished
 <pre>
   Output_folder
   |- amr_results
+  |  |- maps/ (Contains high-res .png circular genome maps)
+  |  |- AMR_Report.tsv
+  |- annotation
+  |- flye
+  |- ice_detection
   |- annotation
   |- flye
   |- ice_detection
@@ -67,8 +72,9 @@ A successful run will contain the following output, including the final polished
   |- MOSTAR_Final_Report.html
   |- MOSTAR_Assembly.fasta
 </pre>
+
 ### Installation (Conda)
-The installation has been designed to be as simple as possible. The included YML will create a separate environment with all the required dependencies. The only manual step is downloading and configuring databases. 
+The installation has been designed to be as simple as possible. The included YML will create a separate environment with all the required dependencies. The only manual step is downloading and configuring databases. For some systems geNomad may become a dependency issue, it is therefor recommended to install it following the steps below. 
 
 ```bash
 # Install micromamba for speed
@@ -136,8 +142,12 @@ mostar --ont ont.fq.gz --genome-size [size] --output [dir] --model [model]
 # Run MOSTAR in Hybrid mode:  
 mostar --ont ont.fq.gz --genome-size [size] --output [dir] --model [model] --r1 R1.fq --r2 R2.fq 
   
-# Include taxonomy (S1), annotations & ICE-detection:
-mostar --ont ont_read.fastq.gz --r1 read1.fastq.gz --r2 read2.fastq.gz --genome-size 1.9m --output Output --kraken2-db kraken2_db_path --bakta-db db-light_path --ice 
+# The "Everything" Run (Taxonomy, Annotation, ICE, and Plasticity/Prophages):
+mostar --ont ont_read.fastq.gz --r1 read1.fastq.gz --r2 read2.fastq.gz \
+  --genome-size 1.9m --output Output \
+  --kraken2-db kraken2_db_path \
+  --bakta-db db-light_path --ice \
+  --genomad-db genomad_db_path --plasticity
   
 # Tips & Notes: 
 * If model is not specified, it will default to r1041_e82_400bps_sup_v5.2.0.
@@ -166,7 +176,7 @@ mostar --ont ont_read.fastq.gz --r1 read1.fastq.gz --r2 read2.fastq.gz --genome-
 | ICE Detection | |
 | `--ice` | MacSyFinder | Use with --bakta-db [Default: disabled] |
 | Classification | |
-| `--kraken-db` | Kraken2 | Requires path to pre-built Kraken2 database" |
+| `--kraken2-db` | Kraken2 | Requires path to pre-built Kraken2 database" |
 | `--confidence` | Kraken2 | Kraken2 confidence threshold [Default: 0.1 |
 | `--emu-db` | EMU | Requires EMU database path, auto-download [16s Amplicon classifier] |
 | Other | |
@@ -221,6 +231,8 @@ Finaly the report willl also feature a detailed AMR table.
 11. Kraken2
 12. EMU
 13. MacSyFinder 
+14. geNomad
+15. Python3 (
 </pre>  
 
 

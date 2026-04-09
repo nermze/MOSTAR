@@ -21,11 +21,23 @@ MOSTAR has been developed and tested on *S. aureus*, *B. fragilis*, as well as *
 
 # Key features
 
-#### Hybrid-Informed Quality Control
-By leveraging Illumina data during the pre-processing phase, the pipeline prioritizes ONT reads with the highest k-mer consistency relative to high-accuracy short reads. This ensures the assembly begins with the most reliable long-read subset possible.
+### Hybrid-Informed Quality Control
+When Illumina short reads are provided, MOSTAR leverages them during the long-read pre-processing phase to guide Filtlong in selecting ONT reads with the highest k-mer consistency relative to the high-accuracy short-read data. This ensures the assembly begins with the most reliable and representative long-read subset, directly improving contiguity and reducing the introduction of systematic errors before assembly begins. In ONT-only mode, quality filtering proceeds using read length and quality score thresholds without short-read guidance.
 
-#### Mapping Genomic Plasticity
-By integrating NCBI AMRFinder+ with MacSyFinder, the pipeline identifies the physical location of resistance elements. Distinguishing between fixed chromosomal resistance and highly mobile ICE enables a more accurate assessment of horizontal gene transfer.
+### Adaptive Assembly and Polishing
+MOSTAR supports both ONT-only and hybrid assembly modes through a tiered polishing strategy. All assemblies undergo ONT-based polishing with Medaka to correct homopolymer errors and indels characteristic of nanopore sequencing. In hybrid mode, a second polishing pass with Polypolish uses per-read, multi-alignment short-read mappings to further resolve errors in repeat regions that single-mapping approaches cannot correct.
+
+### Comprehensive Genomic Profiling
+MOSTAR provides an end-to-end biological characterisation of each assembled genome within a single run. It automatically identifies the organism to species or subspecies level via Kraken2, profiles the complete resistome with NCBI AMRFinder+, and evaluates genomic plasticity through geNomad plasmid and provirus detection. The pipeline optionally performs full functional annotation via Bakta, enabling downstream comparative genomics and submission-ready genome records.
+
+### Integrated Mobilome and Resistance Cross-Referencing
+By tightly integrating NCBI AMRFinder+ with MacSyFinder CONJScan, MOSTAR cross-references the physical location of resistance genes with conjugative transfer machinery. This allows the pipeline to distinguish between fixed chromosomal resistance — which poses a contained clinical risk — and resistance elements embedded within active Integrative and Conjugative Elements (ICEs), which are capable of horizontal transfer to naive recipient strains. This distinction provides a substantially more accurate assessment of horizontal gene transfer potential and the true epidemiological threat posed by the isolate.
+
+### ICE Detection and Structural Annotation
+MOSTAR includes dedicated detection of Integrative and Conjugative Elements using MacSyFinder with the CONJScan model database. ICE boundaries are resolved to exact genomic coordinates and cross-referenced against the Bakta functional annotation to identify flanking genes, attachment sites, and associated cargo. Detected ICEs are rendered directly on the circular genome map with strand-aware orientation arrows, providing immediate visual context for their genomic position relative to resistance and virulence loci.
+
+### Self-Contained Interactive HTML Report
+Every MOSTAR run produces a single, portable HTML report requiring no server or external dependencies. The report includes circular genome maps with zoomable, cursor-tracked pan functionality, a colour-coded complete resistome table, prophage annotations, mobile resistome cross-reference, and a full software version manifest for reproducibility. All genome maps are embedded as base64-encoded images, ensuring the report remains fully self-contained for sharing and archiving.
 
 ### MOSTAR - Workflow and run-modes 
 <p align="left">

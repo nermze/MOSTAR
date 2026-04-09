@@ -189,7 +189,7 @@ mostar --ont ont_read.fastq.gz --r1 read1.fastq.gz --r2 read2.fastq.gz \
 #### Species ID and QC-metrics for assembly
 The report features key run-metrics, including assembly statistics and number of contigs. The report is dynamic and will adapt to user input, as some of the tools like taxonomy and short-read polishing are optional.  
 <p align="left">
-  <img src="assets/Main_report.png" 
+  <img src="assets/Run_statistics.jpg" 
        width="80%" alt="QC-Metrics">
 </p>
 

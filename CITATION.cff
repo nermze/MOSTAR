@@ -98,7 +98,7 @@ references:
     title: "Medaka"
     url: "https://github.com/nanoporetech/medaka"
     year: 2018
-- type: article
+  - type: article
     authors:
       - family-names: Camargo
         given-names: Antonio Pedro
@@ -112,7 +112,7 @@ references:
     volume: 41
     pages: "1303-1312"
     doi: 10.1038/s41587-023-01953-y
-  - type: article
+    - type: article
     authors:
       - family-names: Abby
         given-names: Sophie S.

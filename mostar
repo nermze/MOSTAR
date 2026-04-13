@@ -212,7 +212,7 @@ Annotation:
   --complete      Tell Bakta all sequences are complete/circular
 
 Classification:
-  --kraken2-db     Path to Kraken2 database
+  --kraken2-db    Path to Kraken2 database
   --confidence    Kraken2 confidence threshold [Default: 0.1]
   --emu-db        Path to EMU database — enables 16S classification
 

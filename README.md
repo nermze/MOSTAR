@@ -200,7 +200,7 @@ The report features key run-metrics, including assembly statistics and number of
 </p>
 
 #### Genome visualization
-The report will also draw interactive genome maps, with visualizagion of AMR-gene locations, direction, detected ICE, and GC-content. 
+The report will also draw interactive genome maps, with visualization of AMR-gene locations, direction, detected ICE, and GC-content. 
 <p align="left">
   <img src="assets/Multiple_contigs.png" 
        width="100%" alt="Circular Genome Visualization">

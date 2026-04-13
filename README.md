@@ -107,9 +107,9 @@ pip install .
 # Test the install
 mostar --help
 
-# Troubleshooting and other tips
 
 # If you encounter installation pronblems, first remove geNomad from the YML, then do
+conda env create -f environment.yml -v
 conda install -c conda-forge -c bioconda genomad 
 
 # Use micromamba to install (much faster)

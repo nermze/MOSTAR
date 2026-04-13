@@ -91,27 +91,33 @@ A successful run will contain the following output, including the final polished
 The installation has been designed to be as simple as possible. The included YML will create a separate environment with all the required dependencies. The only manual step is downloading and configuring databases. For some systems geNomad may become a dependency issue, it is therefor recommended to install it following the steps below. 
 
 ```bash
-# Install micromamba for speed
-conda install micromamba
-
 # Download the repository
 git clone https://github.com/nermze/mostar.git
 
 # Change to MOSTAR dir
 cd mostar
 
-# Create env and install using micromamba
-micromamba env create -f environment.yml -v
-micromamba activate mostar_env
+# Create mostar_env using supplied YML
+conda env create -f environment.yml -v
+conda activate mostar_env
 
 # To avoid depedency issues, install geNomad separatly
-micromamba install -c conda-forge -c bioconda genomad
+conda install -c conda-forge -c bioconda genomad
 
 # Install MOSTAR
 pip install .
 
 # Test the install
 mostar --help
+
+# Alternatively use micromamba (much faster)
+conda install micromamba
+micromamba env create -f environment.yml -v
+micromamba activate mostar_env
+micromamba install -c conda-forge -c bioconda genomad
+
+# Install MOSTAR
+pip install .
 ```
 
 #### Setup and download Databases

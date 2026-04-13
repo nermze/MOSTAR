@@ -102,7 +102,7 @@ conda env create -f environment.yml -v
 conda activate mostar_env
 
 # Install MOSTAR
-pip install .
+python -m pip install .
 
 # Test the install
 mostar --help

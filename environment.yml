@@ -16,6 +16,7 @@ dependencies:
   - samtools>=1.19
   - bcftools>=1.19
   - minimap2
+  - circlator
   # Annotation & Profiling
   - bakta
   - ncbi-amrfinderplus

@@ -138,15 +138,6 @@ tar -xvzf k2_pluspf_08gb_20240904.tar.gz
 
 # Download geNomad database in current directory, approx 1.5Gb 
 genomad download-database .
-  
-# Download standard EMU database
-# The pipeline will auto-download the EMU-db if --emu-db is specified.
-# If the automatic download fails, use the steps below
-pip install osfclient
-export EMU_DATABASE_DIR=<path_to_database>
-cd ${EMU_DATABASE_DIR}
-osf -p 56uf7 fetch osfstorage/emu-prebuilt/emu.tar
-tar -xvf emu.tar
 ```
 
 ### Usage instructions & input files
@@ -192,7 +183,6 @@ mostar --ont ont_read.fastq.gz --r1 read1.fastq.gz --r2 read2.fastq.gz \
 | Classification | |
 | `--kraken2-db` | Kraken2 | Requires path to pre-built Kraken2 database" |
 | `--confidence` | Kraken2 | Kraken2 confidence threshold [Default: 0.1 |
-| `--emu-db` | EMU | Requires EMU database path, auto-download [16s Amplicon classifier] |
 | Other | |
 | `--cleanup` | Cleanup | Delete intermediate files |
 | `--threads` | Threads | Select number of threads |
@@ -206,6 +196,7 @@ The report features key run-metrics, including assembly statistics and number of
   <img src="assets/Run_statistics.png" 
        width="100%" alt="QC-Metrics">
 </p>
+
 
 #### Genome visualization
 The report will also draw interactive genome maps, with visualization of AMR-gene locations, direction, detected ICE, and GC-content. 
@@ -222,7 +213,7 @@ If ICE detection has been enabled, the pipeline will extract coordinates from th
 </p>
 
 #### AMR+ Summary Table
-Finaly the report willl also feature a detailed AMR table.  
+Finaly the report willl also feature a detailed AMR table. Plasmid-borne genes will be visualized in red.  
 <p align="left">
   <img src="assets/AMR_table.png" 
        width="100%" alt="AMR summary table">
@@ -243,10 +234,9 @@ Finaly the report willl also feature a detailed AMR table.
 9. Samtools
 10. Minimap2
 11. Kraken2
-12. EMU
 13. MacSyFinder 
 14. geNomad
-15. Python3 (
+15. Python3 
 </pre>  
 
 

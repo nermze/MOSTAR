@@ -16,7 +16,7 @@ trap 'echo "[ERROR] Pipeline failed at line $LINENO"; exit 1' ERR
 #    - ONT polishing (Medaka) + Hybrid polishing (Polypolish)
 #    - Functional annotation (Bakta)
 #    - AMR profiling (AMRFinder+)
-#    - Taxonomic profiling (Kraken2 / EMU)
+#    - Taxonomic profiling (Kraken2)
 #    - Genomic plasticity & mobile elements (geNomad)
 #    - ICE / conjugative element detection (MacSyFinder / CONJScan)
 #    - Circular genome maps with GC, ICE, and AMR tracks
@@ -37,7 +37,7 @@ readonly GREEN='\033[0;32m'
 readonly NC='\033[0m'
 
 # Progress tracking
-TOTAL_STEPS=14
+TOTAL_STEPS=15
 CURRENT_STEP=0
 
 # ------------------------------------------------------------------------------
@@ -52,7 +52,6 @@ R2=""
 OUTDIR=""
 GSIZE=""
 ORGANISM=""
-EMU_DB=""
 BAKTA_DB=""
 BAKTA_COMPLETE=""
 BAKTA_REGIONS=""
@@ -110,41 +109,126 @@ format_bp() {
 #   Animates a progress bar for the current step, then runs the command if
 #   the condition is "true", otherwise sleeps briefly to advance the bar.
 # ------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
+# run_step <label> <run:true|false> <command>
+# ------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+# Pipeline Tools Initialization (Defines the upfront list)
+# ------------------------------------------------------------------------------
+PIPELINE_STEPS=(
+    "Short-read QC (Fastp)"
+    "Long-read QC (Filtlong)"
+    "De-novo Assembly (Flye)"
+    "ONT Polishing (Medaka)"
+    "Hybrid Polishing (Polypolish)"
+    "Fix Assembly Origin (Circlator)"
+    "Taxonomy (Kraken2)"
+    "Annotation (Bakta)"
+    "AMR Profiling (AMRFinder+)"
+    "ICE Detection (MacSyFinder)"
+    "Plasticity (geNomad)"
+    "Generating Circular Maps"
+    "Generating HTML Report"
+    "Cleaning up intermediate files"
+)
+TOTAL_STEPS=${#PIPELINE_STEPS[@]}
+declare -a STEP_STATES
+for ((i=0; i<TOTAL_STEPS; i++)); do STEP_STATES[i]="waiting"; done
+CURRENT_STEP=0
+DASHBOARD_DRAWN=""
+
+# ------------------------------------------------------------------------------
+# run_step (Dashboard Version)
+# ------------------------------------------------------------------------------
 run_step() {
     local name="$1"
     local run="$2"
     local cmd="$3"
 
-    local pct_start pct_end
-    pct_start=$(( (CURRENT_STEP * 100) / TOTAL_STEPS ))
-    ((CURRENT_STEP++)) || true
-    pct_end=$(( (CURRENT_STEP * 100) / TOTAL_STEPS ))
+    local idx=$CURRENT_STEP
+    local pct_start=$(( (idx * 100) / TOTAL_STEPS ))
+    local pct_end=$(( ((idx + 1) * 100) / TOTAL_STEPS ))
 
-    local G='\033[0;32m' B='\033[1;34m' N='\033[0m'
+    local G='\033[0;32m' B='\033[1;34m' Y='\033[1;33m' K='\033[1;30m' N='\033[0m'
+    
+    # 1. Mark current tool as running or skipped
+    if [[ "$run" == "true" ]]; then
+        STEP_STATES[$idx]="running"
+    else
+        STEP_STATES[$idx]="skipped"
+    fi
+
+    draw_ui() {
+        local current_pct=$1
+        local elapsed=$2
+        local bar=$3
+        local spaces=$4
+
+        # Move cursor back up to the top of the list (skip the very first time)
+        if [[ -n "$DASHBOARD_DRAWN" ]]; then
+            printf "\033[%dA" $((TOTAL_STEPS + 2))
+        fi
+        DASHBOARD_DRAWN="yes"
+
+        # Redraw the list of tools
+        for (( j=0; j<TOTAL_STEPS; j++ )); do
+            local s_name="${PIPELINE_STEPS[j]}"
+            local s_state="${STEP_STATES[j]}"
+            
+            if [[ "$s_state" == "complete" ]]; then
+                printf "\033[K${G}%-35s complete${N}\n" "$s_name"
+            elif [[ "$s_state" == "skipped" ]]; then
+                printf "\033[K${K}%-35s skipped${N}\n" "$s_name"
+            elif [[ "$s_state" == "running" ]]; then
+                printf "\033[K${Y}%-35s running${N}\n" "$s_name"
+            else
+                printf "\033[K%-35s waiting\n" "$s_name"
+            fi
+        done
+        
+        # Redraw the empty line and the bottom progress bar
+        echo -e "\033[K"
+        printf "\033[K${B}[MOSTAR]${N} ${G}[%s%s]${N} %d%% : %-30s ${B}[%s]${N}\n" \
+               "$bar" "$spaces" "$current_pct" "$name" "$elapsed"
+    }
+
+    # Animate progress bar for the phase
     local i now diff elapsed filled empty bar spaces
-
     for (( i = pct_start; i <= pct_end; i++ )); do
         now=$(date +%s)
         diff=$(( now - START_TIME ))
         elapsed=$(printf "%02d:%02d:%02d" $((diff/3600)) $((diff%3600/60)) $((diff%60)))
         filled=$(( i / 4 ))
         empty=$(( 25 - filled ))
-        bar=$(printf "%${filled}s" | tr ' ' '█')
-        spaces=$(printf "%${empty}s" | tr ' ' '░')
-        printf "\r${B}[MOSTAR]${N} ${G}[%s%s]${N} %d%% : %-30s ${B}[%s]${N}" \
-               "$bar" "$spaces" "$i" "$name" "$elapsed"
-        sleep 0.01
+        bar=$(printf "%${filled}s" | tr ' ' '#')
+        spaces=$(printf "%${empty}s" | tr ' ' '-')
+        
+        draw_ui "$i" "$elapsed" "$bar" "$spaces"
+        
+        if [[ "$run" == "true" ]]; then
+            sleep 0.01
+        else
+            sleep 0.002 # Speed through skipped steps
+        fi
     done
 
+    # Execute the tool command
     if [[ "$run" == "true" ]]; then
         eval "$cmd"
-    else
-        sleep 0.2
+        STEP_STATES[$idx]="complete"
     fi
 
+    # Final redraw for this step to instantly show it as 'complete'
+    now=$(date +%s)
+    diff=$(( now - START_TIME ))
+    elapsed=$(printf "%02d:%02d:%02d" $((diff/3600)) $((diff%3600/60)) $((diff%60)))
+    draw_ui "$pct_end" "$elapsed" "$bar" "$spaces"
+
+    ((CURRENT_STEP++)) || true
+
+    # 5. Success message at the very end
     if [[ "$pct_end" -eq 100 ]]; then
-        echo ""
-        echo ""
         echo -e "\n${G}✔ MOSTAR finished successfully.${N}"
     fi
 }
@@ -212,9 +296,8 @@ Annotation:
   --complete      Tell Bakta all sequences are complete/circular
 
 Classification:
-  --kraken2-db    Path to Kraken2 database
+  --kraken2-db     Path to Kraken2 database
   --confidence    Kraken2 confidence threshold [Default: 0.1]
-  --emu-db        Path to EMU database — enables 16S classification
 
 Mobile element detection:
   --ice           Run MacSyFinder CONJScan (requires --bakta-db)
@@ -239,9 +322,13 @@ HELP
 generate_html_report() {
     local report_sample report_date duration
     local flye_v medaka_v amrfinder_v bakta_v kraken_v
-    local fastp_v bwa_v filtlong_v polypolish_v emu_v
-    local full_amr_section mobile_section phage_section
-    local maps_section map_content img b64 label
+    local fastp_v bwa_v filtlong_v polypolish_v
+    local full_amr_section="" 
+    local mobile_section="" 
+    local phage_section=""
+    local maps_section="" 
+    local map_content="" 
+    local img b64 label
 
     report_sample=$(basename "${ONT:-sample}")
     report_date=$(date '+%Y-%m-%d %H:%M:%S')
@@ -257,26 +344,47 @@ generate_html_report() {
     bwa_v=$(bwa 2>&1 | awk '/Version:/{print $NF}' || echo "N/A")
     filtlong_v=$(filtlong --version 2>/dev/null || echo "N/A")
     polypolish_v=$(polypolish --version 2>/dev/null || echo "N/A")
-    emu_v=$(emu --version 2>/dev/null || echo "N/A")
 
     local amr_tsv="$OUTDIR/amr_results/AMR_Report.tsv"
     local map_dir="$OUTDIR/amr_results/maps"
     local html_out="$OUTDIR/MOSTAR_Final_Report.html"
 
-    # AMR table
-    full_amr_section=""
+    local MAIN_ID_VAL
+    MAIN_ID_VAL=$(awk '/^>/ {if(l) print l, id; id=$1; l=0; next} {l+=length($0)} END {print l, id}' "$FINAL_ASM" 2>/dev/null | sort -nr | head -n1 | awk '{print $2}' | sed 's/>//')
+    [[ -z "$MAIN_ID_VAL" ]] && MAIN_ID_VAL="unknown"
+
+    # AMR table (Using Python directly via stdin)
     if [[ -f "$amr_tsv" ]]; then
-        amr_html=$(python3 - "$amr_tsv" <<'PYAMR'
+        # Pass MAIN_ID_VAL as the second argument to Python
+        amr_html=$(python3 - "$amr_tsv" "$MAIN_ID_VAL" <<'PYAMR'
 import sys, pandas as pd
 
-def row_color(cls):
+# Clean the main ID to prevent whitespace matching errors
+main_id = str(sys.argv[2]).strip()
+
+def row_color(cls, contig):
     c = str(cls).lower()
+    # Clean the contig ID
+    c_id = str(contig).split()[0].strip()
+
+    # 1. ULTIMATE PRIORITY: Is it on a plasmid? 
+    # If yes, it is ALWAYS RED (Even if it is virulence)
+    if c_id != main_id:
+        return '#e74c3c'
+
+    # 2. SECOND PRIORITY: Is it Virulence on the Main Chromosome?
+    # If yes, it is BLACK
+    if 'virulence' in c:
+        return '#000000'
+
+    # 3. STANDARD COLORS: For AMR genes on the Main Chromosome
     if any(x in c for x in ['beta-lactam', 'penicillin', 'carbapenem']): return '#3498db'
     if 'tetracycline'    in c: return '#9b59b6'
-    if 'aminoglycoside'  in c: return '#8e44ad'
+    if 'aminoglycoside'  in c: return '#e67e22'
     if any(x in c for x in ['macrolide', 'lincosamide', 'streptogramin']): return '#f1c40f'
     if 'quinolone' in c or 'fluoroquinolone' in c: return '#27ae60'
-    if 'virulence' in c: return '#e74c3c'
+    if 'ice' in c or 'mobilome' in c: return '#00f2ff'
+    
     return '#2c3e50'
 
 df = pd.read_csv(sys.argv[1], sep='\t')
@@ -285,14 +393,14 @@ df = df[['Element symbol', 'Class', '% Identity to reference', 'Contig id']]
 
 rows = ""
 for _, r in df.iterrows():
-    color = row_color(r['Class'])
+    # Pass both Class and Contig to the color logic
+    color = row_color(r['Class'], r['Contig id'])
     rows += (
         f"<tr>"
-        f"<td><span style='border-left:4px solid {color};"
-        f"padding-left:10px;font-weight:600;'>{r['Element symbol']}</span></td>"
-        f"<td style='color:{color};font-weight:600;'>{r['Class']}</td>"
+        f"<td><span style='border-left:4px solid {color}; padding-left:10px; font-weight:600;'>{r['Element symbol']}</span></td>"
+        f"<td style='color:{color}; font-weight:600;'>{r['Class']}</td>"
         f"<td>{r['% Identity to reference']:.1f}%</td>"
-        f"<td style='color:#7f8c8d;font-size:0.85em;'>{r['Contig id']}</td>"
+        f"<td style='color:#7f8c8d; font-size:0.85em;'>{r['Contig id']}</td>"
         f"</tr>"
     )
 
@@ -319,9 +427,8 @@ PYAMR
         mobile_section="<section class='card'>
             <h2>Mobile Resistome &amp; Genomic Plasticity</h2>
             <div class='alert-box alert-red'>
-                <strong>Alert:</strong> Found
+                <strong>Plasmid-borne AMR detected:</strong>
                 <span class='big-num'>${HIGH_RISK_COUNT}</span>
-                high-risk plasmid-borne resistance elements.
             </div>
             <table class='resistome-table' id='resTable'>
                 <thead><tr><th>Gene</th><th>Contig</th><th>Class</th><th>Score</th><th>Risk</th></tr></thead>
@@ -486,24 +593,22 @@ PYAMR
 </div>
 
 ${METRICS_BLOCK}
-
+${mobile_section}
+${phage_section}
 <div class="card">
-    <h2>AMR Colour Legend</h2>
+    <h2>Colour Legend</h2>
     <div class="legend-grid">
         <div class="legend-item"><div class="swatch" style="background:#3498db;"></div>Beta-lactams</div>
         <div class="legend-item"><div class="swatch" style="background:#9b59b6;"></div>Tetracyclines</div>
-        <div class="legend-item"><div class="swatch" style="background:#8e44ad;"></div>Aminoglycosides</div>
+        <div class="legend-item"><div class="swatch" style="background:#e67e22;"></div>Aminoglycosides</div>
         <div class="legend-item"><div class="swatch" style="background:#f1c40f;"></div>Macrolides</div>
         <div class="legend-item"><div class="swatch" style="background:#27ae60;"></div>Quinolones</div>
-        <div class="legend-item"><div class="swatch" style="background:#00f2ff; border-color:#aaa;"></div>ICE / Mobilome</div>
-        <div class="legend-item"><div class="swatch" style="background:#2c3e50;"></div>Other AMR</div>
-        <div class="legend-item"><div class="swatch" style="background:#e74c3c;"></div>Virulence / High-risk</div>
+        <div class="legend-item"><div class="swatch" style="background:#000000;"></div>Virulence</div>
         <div class="legend-item"><div class="swatch" style="background:#2e7d32;"></div>Prophage</div>
+        <div class="legend-item"><div class="swatch" style="background:#e74c3c;"></div>Plasmid-borne</div>
+        <div class="legend-item"><div class="swatch" style="background:#00f2ff; border-color:#aaa;"></div>ICE</div>
     </div>
 </div>
-
-${mobile_section}
-${phage_section}
 ${maps_section}
 ${full_amr_section}
 
@@ -527,36 +632,52 @@ ${full_amr_section}
             <tr><td>AMRFinder+</td><td>$amrfinder_v</td></tr>
             <tr><td>Bakta</td><td>$bakta_v</td></tr>
             <tr><td>Kraken2</td><td>$kraken_v</td></tr>
-            <tr><td>EMU</td><td>$emu_v</td></tr>
         </table>
     </div>
 </div>
 
 <script>
-    const pData = ${PHAGE_JS_DATA};
-    const rData = ${RESISTOME_JS_DATA};
+    const MAIN_ID = "${MAIN_ID_VAL}";
+    const pData = ${PHAGE_JS_DATA:-[]};
+    const rData = ${RESISTOME_JS_DATA:-[]};
 
     // Populate mobile resistome table
     const resBody = document.querySelector('#resTable tbody');
     if (resBody && rData.length > 0) {
         rData.forEach(r => {
-            let cls = r.class;
-            if (!cls || cls === 'nan' || cls === 'N/A') cls = 'Virulence';
-            if (r.type && r.type.toLowerCase() === 'virulence') cls = 'Virulence';
+            let cls = r.class || 'Other';
+            let type = (r.type || "").toLowerCase();
+            let color = '#2c3e50'; // Default: Dark Grey
 
-            const c = cls.toLowerCase();
-            let color = '#2c3e50';
-            if (c.includes('beta-lactam') || c.includes('penicillin')) color = '#3498db';
-            else if (c.includes('tetracycline'))                        color = '#9b59b6';
-            else if (c.includes('aminoglycoside'))                      color = '#8e44ad';
-            else if (c.includes('macrolide'))                           color = '#f1c40f';
-            else if (c.includes('quinolone'))                           color = '#27ae60';
-            else if (c.includes('virulence'))                           color = '#e74c3c';
+            // 1. ULTIMATE PRIORITY: Is it on a plasmid?
+            // If the contig name doesn't match the main one, it's ALWAYS RED.
+            if (r.contig && r.contig !== MAIN_ID) {
+                color = '#e74c3c'; 
+            } 
+            // 2. SECOND PRIORITY: Is it Virulence?
+            // If it's on the main chromosome and it's virulence, it's ALWAYS BLACK.
+            else if (cls.toLowerCase().includes('virulence') || type === 'virulence') {
+                color = '#000000';
+            }
+            // 3. THIRD PRIORITY: Standard colors for Main Chromosome
+            else {
+                const c = cls.toLowerCase();
+                if (c.includes('beta-lactam') || c.includes('penicillin')) color = '#3498db';
+                else if (c.includes('tetracycline'))   color = '#9b59b6';
+                else if (c.includes('aminoglycoside')) color = '#e67e22'; 
+                else if (c.includes('macrolide'))      color = '#f1c40f';
+                else if (c.includes('quinolone'))      color = '#27ae60';
+                else if (c.includes('ice') || c.includes('mobilome')) color = '#00f2ff';
+                
+                // Only if it's NOT virulence and ON the main chromosome do we use 
+                // Red for "HIGH risk" flags from AMRFinder
+                else if (r.risk === 'HIGH') color = '#e74c3c';
+            }
 
             const tr = document.createElement('tr');
             tr.innerHTML =
                 \`<td><span style="border-left:4px solid \${color};padding-left:10px;font-weight:600;">\${r.gene}</span></td>\` +
-                \`<td>\${r.contig}</td><td>\${cls}</td><td>\${r.score}</td>\` +
+                \`<td>\${r.contig}</td><td>\${cls}</td><td>\${r.score || 'N/A'}</td>\` +
                 \`<td><span class="\${r.risk === 'HIGH' ? 'risk-high' : ''}">\${r.risk}</span></td>\`;
             resBody.appendChild(tr);
         });
@@ -610,7 +731,6 @@ while [[ $# -gt 0 ]]; do
         --complete|-i)      BAKTA_COMPLETE="--complete";   shift 1 ;;
         --kraken2-db|-k)     KRAKEN2_DB="$2"; RUN_KRAKEN2=true; shift 2 ;;
         --confidence|-c)    KRAKEN_CONFIDENCE="$2";        shift 2 ;;
-        --emu-db|-e)        EMU_DB="$2";                   shift 2 ;;
         --ice|-I)           RUN_ICE=true;                  shift 1 ;;
         --plasticity|-s)    RUN_GENOMAD=true;              shift 1 ;;
         --genomad-db|-G)    GENOMAD_DB="$2";               shift 2 ;;
@@ -751,6 +871,7 @@ run_step "ONT Polishing (Medaka)" "true" \
         -i '$OUTDIR/intermediate/ont_filt.fq.gz' \
         -d '$OUTDIR/flye/assembly.fasta' \
         -m $MEDAKA_MODEL -t $THREADS \
+        -b 32 \
         -o '$OUTDIR/medaka' \
         >'$OUTDIR/logs/medaka.log' 2>&1"
 
@@ -795,18 +916,22 @@ else
 fi
 
 # ==============================================================================
-#  Step 6 — 16S Taxonomy (EMU)  [optional]
+#  Step 6 — Standardise Assembly Origin (Circlator)
 # ==============================================================================
-if [[ -n "$EMU_DB" ]]; then
-    run_step "Taxonomy (EMU)" "true" \
-        "emu abundance '$FINAL_ASM' \
-            --db '$EMU_DB' --threads $THREADS \
-            --output-dir '$OUTDIR/taxonomy/emu_asm' \
-            --output-basename emu_results \
-            >/dev/null 2>&1"
+if command -v circlator &>/dev/null; then
+    run_step "Fix Assembly Origin (Circlator)" "true" \
+        "circlator fixstart '$FINAL_ASM' '$OUTDIR/intermediate/fixed_origin' \
+        >'$OUTDIR/logs/circlator.log' 2>&1 || true"
+
+    if [[ -f "$OUTDIR/intermediate/fixed_origin.fasta" ]]; then
+        mv "$OUTDIR/intermediate/fixed_origin.fasta" "$FINAL_ASM"
+    else
+        echo "[INFO] Circlator did not find dnaA. Assembly left un-rotated." >> "$OUTDIR/logs/circlator.log"
+    fi
 else
-    run_step "Taxonomy (EMU)" "false" ""
+    run_step "Standardising Origin (Circlator)" "false" ""
 fi
+
 
 # ==============================================================================
 #  Step 7 — Whole-genome Taxonomy (Kraken2)  [optional]
@@ -818,7 +943,7 @@ if [[ "$RUN_KRAKEN2" == "true" ]]; then
 
     if [[ -s "$KRAKEN_REPORT" ]]; then
         # Prefer Subspecies/Strain (S1, S2...) if available
-        TOP_HIT=$(awk -F'\t' '$4 ~ /^S[0-9]+/' "$KRAKEN_REPORT" | sort -k1,1nr | head -n1 || true)
+        TOP_HIT=$(awk -F'\t' '$4 == "S1"' "$KRAKEN_REPORT" | sort -k1,1nr | head -n1 || true)
         
         # Fallback to general Species (S)
         [[ -z "$TOP_HIT" ]] && \
@@ -873,7 +998,7 @@ if [[ "$RUN_ICE" == "true" ]]; then
     P_FILE=$(ls "$OUTDIR/annotation/"*.faa 2>/dev/null | head -n1 || true)
     if [[ -f "$P_FILE" ]]; then
         run_step "ICE Detection (MacSyFinder)" "true" \
-            "macsyfinder \
+            "rm -rf '$OUTDIR/ice_detection' && macsyfinder \
                 --db-type ordered_replicon \
                 --models CONJScan \
                 -o '$OUTDIR/ice_detection' \
@@ -1088,18 +1213,33 @@ if os.path.exists(MOB_FILE) and os.path.getsize(MOB_FILE) > 0:
         pass
 
 
-def amr_color(amr_class, amr_type="AMR", gene_name=""):
-    if gene_name in high_risk_genes: return '#e74c3c' # High-risk mobile AMR
-    
+def amr_color(amr_class, amr_type="AMR", gene_name="", is_main=True):
+    # ABSOLUTE PRIORITY: If it's on a plasmid, everything is ALWAYS Red
+    if not is_main:
+        return '#e74c3c'
+        
     c = str(amr_class).lower()
     t = str(amr_type).lower()
+
+    # Main Chromosome: Virulence is Black
+    if 'virulence' in c or t == 'virulence': 
+        return '#000000'
+    
+    # Main Chromosome: High-risk genes are Red
+    try:
+        if gene_name in high_risk_genes:
+            return '#e74c3c'
+    except NameError:
+        pass
+
+    # Main Chromosome: Standard AMR Colors
     if any(x in c for x in ['beta-lactam', 'penicillin', 'carbapenem']): return '#3498db'
     if 'tetracycline'   in c: return '#9b59b6'
-    if 'aminoglycoside' in c: return '#8e44ad'
+    if 'aminoglycoside' in c: return '#e67e22'
     if any(x in c for x in ['macrolide', 'lincosamide', 'streptogramin']): return '#f1c40f'
     if 'quinolone' in c or 'fluoroquinolone' in c: return '#27ae60'
-    if 'virulence' in c or t == 'virulence': return '#e74c3c'
     if 'ice' in c or 'conjugation' in c:    return '#00f2ff'
+    
     return '#2c3e50'
 
 
@@ -1213,7 +1353,7 @@ def draw_map(record, filename, centre_label, ice_df, phage_df, amr_df, is_main=F
         arcs = []
         for _, row in hits.iterrows():
             gene_name = str(row.iloc[5]) 
-            color  = amr_color(row.iloc[10], row.iloc[8], gene_name) 
+            color = amr_color(row.iloc[10], row.iloc[8], gene_name, is_main)
             s_rad  = (float(row.iloc[2]) / gl) * two_pi
             e_rad  = (float(row.iloc[3]) / gl) * two_pi
             # Safe strand parsing (column 4 is Strand in AMRFinder+)
@@ -1301,11 +1441,17 @@ try:
              if os.path.exists(AMR_FILE) \
              else pd.DataFrame()
 
+    # Sort all records by length so the largest is always at index 0
     records = sorted(list(SeqIO.parse(FA, 'fasta')),
                      key=lambda r: len(r.seq), reverse=True)
 
+    # Identify largest one
+    main_id = str(records[0].id).split()[0]
+    
     species = os.environ.get('ASM_SPECIES_FULL', 'Assembly')
-    chrom   = records[0]
+    
+    # Draw the Main Chromosome 
+    chrom = records[0]
     chrom_gc = calc_gc(chrom.seq) * 100 
     
     draw_map(chrom,
@@ -1314,17 +1460,18 @@ try:
             ice_df=ice_df,
             phage_df=phage_df,
             amr_df=amr_df,
-            is_main=True)
+            is_main=True) # Tells the color function to use the rainbow scale
 
+    # Draw everything else as Plasmids (Red)
     for i, rec in enumerate(records[1:], start=1):
         rec_gc = calc_gc(rec.seq) * 100 
         draw_map(rec,
                 filename=f"{i+1:02d}_Extrachromosomal_{i}.png",
-                centre_label=f"Extrachromosomal DNA\n{len(rec.seq)/1000:.1f} kb\nGC: {rec_gc:.1f}%\n{str(rec.id).split()[0]}",
+                centre_label=f"Plasmid\n{len(rec.seq)/1000:.1f} kb\n{str(rec.id).split()[0]}",
                 ice_df=ice_df,
                 phage_df=phage_df,
                 amr_df=amr_df,
-                is_main=False)
+                is_main=False) 
 
 except Exception as exc:
     import traceback

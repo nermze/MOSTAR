@@ -24,6 +24,45 @@ trap 'echo "[ERROR] Pipeline failed at line $LINENO"; exit 1' ERR
 #
 # ==============================================================================
 
+
+#  =============================================================================
+#  Environment Validation & Path Sanitization 
+# ==============================================================================
+
+# Enforce Conda environment
+if [[ -z "${CONDA_PREFIX:-}" ]]; then
+    echo "[ERROR] No Conda environment detected!"
+    echo "Please run: conda activate mostar_env"
+    exit 1
+fi
+
+# Sanitize PATH to prioritize Conda and lock out local user bin conflicts
+export PATH="$CONDA_PREFIX/bin:$PATH"
+
+# 3. Verify critical tools are strictly loading from Conda
+REQUIRED_TOOLS=(
+    "flye" "medaka_consensus" "samtools" "bwa" "amrfinder"
+)
+MISSING_TOOLS=0
+for tool in "${REQUIRED_TOOLS[@]}"; do
+    TOOL_PATH=$(command -v "$tool" || true)
+    if [[ -z "$TOOL_PATH" ]]; then
+        echo "[ERROR] Required tool not found: $tool"
+        MISSING_TOOLS=1
+    elif [[ "$TOOL_PATH" != "$CONDA_PREFIX"* ]]; then
+        echo "[ERROR] Tool hijack detected! '$tool' is loading from outside the environment:"
+        echo "        Found at: $TOOL_PATH"
+        echo "        Expected: $CONDA_PREFIX/bin/$tool"
+        MISSING_TOOLS=1
+    fi
+done
+
+if [[ "$MISSING_TOOLS" -eq 1 ]]; then
+    echo "[ERROR] Environment validation failed. Please check your Conda installation."
+    exit 1
+fi
+
+
 # ------------------------------------------------------------------------------
 # Constants
 # ------------------------------------------------------------------------------
@@ -57,7 +96,7 @@ BAKTA_COMPLETE=""
 BAKTA_REGIONS=""
 KRAKEN2_DB=""
 KRAKEN_CONFIDENCE="0.01"
-GENOMAD_DB="$HOME/genomad_db"
+GENOMAD_DB=""
 USE_META=""
 CLEANUP=false
 RUN_KRAKEN2=false
@@ -763,21 +802,59 @@ if ! [[ "$GSIZE" =~ ^[0-9]+(\.[0-9]+)?[kKmMgG]?$ ]]; then
     echo "[ERROR] Invalid genome size format: $GSIZE"; exit 1
 fi
 
-# Required tools
-for tool in flye medaka_consensus samtools bwa amrfinder; do
-    if ! command -v "$tool" &>/dev/null; then
-        echo "[ERROR] Required tool not found: $tool"; MISSING=1
+# ==============================================================================
+#  Environment Validation & Strict Tool Auditing
+# ==============================================================================
+
+MISSING=0
+
+# Enforce that the script is running inside a Conda environment
+if [[ -z "${CONDA_PREFIX:-}" ]]; then
+    echo "[ERROR] No Conda environment detected!"
+    echo "Please run: conda activate mostar_env"
+    exit 1
+fi
+
+# Sanitize the PATH to prioritize Conda and ignore local user bins (~/.local/bin)
+export PATH="$CONDA_PREFIX/bin:$PATH"
+
+
+# Base tools required for EVERY run
+REQUIRED_TOOLS=(
+    "flye" "medaka_consensus" "samtools" "amrfinder" "circlator" "filtlong"
+)
+
+# Conditionally require tools based on user flags
+if [[ -n "$R1" && -n "$R2" ]]; then
+    REQUIRED_TOOLS+=("fastp" "bwa" "polypolish")
+fi
+[[ "$SKIP_BAKTA" == "false" ]] && REQUIRED_TOOLS+=("bakta")
+[[ "$RUN_ICE" == "true" ]]     && REQUIRED_TOOLS+=("macsyfinder")
+[[ "$RUN_GENOMAD" == "true" ]] && REQUIRED_TOOLS+=("genomad")
+[[ "$RUN_KRAKEN2" == "true" ]] && REQUIRED_TOOLS+=("kraken2")
+
+# Verify tools exist AND live inside the active Conda environment
+for tool in "${REQUIRED_TOOLS[@]}"; do
+    TOOL_PATH=$(command -v "$tool" || true)
+    
+    if [[ -z "$TOOL_PATH" ]]; then
+        echo "[ERROR] Required tool not found: $tool"
+        MISSING=1
+    elif [[ "$TOOL_PATH" != "$CONDA_PREFIX"* ]]; then
+        echo "[ERROR] Tool hijack detected! '$tool' is loading from outside the environment:"
+        echo "        Found at: $TOOL_PATH"
+        echo "        Expected: $CONDA_PREFIX/bin/$tool"
+        MISSING=1
     fi
 done
 
-# Output directory — auto-generate if omitted
+# Output directory & Database Checks
 if [[ -z "$OUTDIR" ]]; then
     OUTDIR="MOSTAR_$(date +%Y%m%d_%H%M%S)"
     echo "[WARNING] No output directory specified — using: $OUTDIR"
 fi
 mkdir -p "$OUTDIR"/{logs,intermediate,amr_results}
 
-# Optional databases
 if [[ -z "$BAKTA_DB" || ! -d "$BAKTA_DB" ]]; then
     echo "[WARNING] Bakta database not found — annotation will be skipped."
     SKIP_BAKTA=true
@@ -943,16 +1020,12 @@ if [[ "$RUN_KRAKEN2" == "true" ]]; then
 
     if [[ -s "$KRAKEN_REPORT" ]]; then
         # Prefer Subspecies/Strain (S1, S2...) if available
-        TOP_HIT=$(awk -F'\t' '$4 == "S1"' "$KRAKEN_REPORT" | sort -k1,1nr | head -n1 || true)
+        TOP_HIT=$(awk -F'\t' '$4 == "S" || $4 == "S1"' "$KRAKEN_REPORT" | sort -k1,1nr | head -n1 || true)
         
         # Fallback to general Species (S)
         [[ -z "$TOP_HIT" ]] && \
-            TOP_HIT=$(awk -F'\t' '$4 == "S"' "$KRAKEN_REPORT" | sort -k1,1nr | head -n1 || true)
-            
-        # Fallback to Genus (G)
-        [[ -z "$TOP_HIT" ]] && \
             TOP_HIT=$(awk -F'\t' '$4 == "G"' "$KRAKEN_REPORT" | sort -k1,1nr | head -n1 || true)
-            
+        
         [[ -n "$TOP_HIT" ]] && \
             ASM_SPECIES_FULL=$(echo "$TOP_HIT" | cut -f6- | sed 's/^[[:space:]]*//')
     fi
@@ -1474,9 +1547,10 @@ try:
                 is_main=False) 
 
 except Exception as exc:
-    import traceback
+    import traceback, sys
     with open(os.path.join(OUTDIR, 'logs', 'viz_error.log'), 'w') as fh:
         fh.write(traceback.format_exc())
+    sys.exit(1)
 PYEOF
 
 run_step "Generating Circular Maps" "true" "python3 '$VIZ_SCRIPT'"

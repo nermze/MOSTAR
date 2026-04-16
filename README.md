@@ -15,29 +15,9 @@
   <img src="https://img.shields.io/badge/v1.0.0-Initial release-green.svg" />
 </p>
 
-MOSTAR is comprehensive and complete bioinformatics pipeline for downstream analysis of whole-genome Oxford Nanopore sequencing data (ONT-reads). The pipeline constructs highly-polished genomes (using hybrid- or non-hybrid assembly), in addition to performing functional annotation, AMR profiling, ICE detection, and taxonomic classification — with built-in quality controls and an interactive HTML report. The name Mostar is inspired by the historic Stari Most (Old Bridge) of Mostar, a symbol of connection and cultural resilience.  
+MOSTAR is comprehensive bioinformatics pipeline for microbial analysis of whole-genome Oxford Nanopore sequencing data (ONT-reads). The pipeline constructs highly-polished genomes (using hybrid- or non-hybrid assembly), in addition to performing functional annotation, AMR profiling, ICE detection, and taxonomic classification — with built-in quality controls and an interactive HTML report. The pipeline bridges the gap between long-read and short-read technology, its name is therefore inspired by the historic Stari Most (Old Bridge) of Mostar, a symbol of connection and cultural resilience.  
 
-MOSTAR has been developed and tested on *S. aureus*, *B. fragilis*, as well as *H. influenzae* strains, but will work with any bacteria, as long as the correct genome size and ONT model are specified. The pipeline contains some of the most well known tools in bioinformatics, and is designed to be a "one-stop shop" for most bacterial analysis. Finally the pipeline provides results and log files from every included tool. 
-
-# Key features
-
-### Hybrid-Informed Quality Control
-When Illumina short reads are provided, MOSTAR leverages them during the long-read pre-processing phase to guide Filtlong in selecting ONT reads with the highest k-mer consistency relative to the high-accuracy short-read data. This ensures the assembly begins with the most reliable and representative long-read subset, directly improving contiguity and reducing the introduction of systematic errors before assembly begins. In ONT-only mode, quality filtering proceeds using read length and quality score thresholds without short-read guidance.
-
-### Adaptive Assembly and Polishing
-MOSTAR supports both ONT-only and hybrid assembly modes through a tiered polishing strategy. All assemblies undergo ONT-based polishing with Medaka to correct homopolymer errors and indels characteristic of nanopore sequencing. In hybrid mode, a second polishing pass with Polypolish uses per-read, multi-alignment short-read mappings to further resolve errors in repeat regions that single-mapping approaches cannot correct.
-
-### Comprehensive Genomic Profiling
-MOSTAR provides an end-to-end biological characterisation of each assembled genome within a single run. It automatically identifies the organism to species or subspecies level via Kraken2, profiles the complete resistome with NCBI AMRFinder+, and evaluates genomic plasticity through geNomad plasmid and provirus detection. The pipeline optionally performs full functional annotation via Bakta, enabling downstream comparative genomics and submission-ready genome records.
-
-### Integrated Mobilome and Resistance Cross-Referencing
-By tightly integrating NCBI AMRFinder+ with MacSyFinder CONJScan, MOSTAR cross-references the physical location of resistance genes with conjugative transfer machinery. This allows the pipeline to distinguish between fixed chromosomal resistance — which poses a contained clinical risk — and resistance elements embedded within active Integrative and Conjugative Elements (ICEs), which are capable of horizontal transfer to naive recipient strains. This distinction provides a substantially more accurate assessment of horizontal gene transfer potential and the true epidemiological threat posed by the isolate.
-
-### ICE Detection and Structural Annotation
-MOSTAR includes dedicated detection of Integrative and Conjugative Elements using MacSyFinder with the CONJScan model database. ICE boundaries are resolved to exact genomic coordinates and cross-referenced against the Bakta functional annotation to identify flanking genes, attachment sites, and associated cargo. Detected ICEs are rendered directly on the circular genome map with strand-aware orientation arrows, providing immediate visual context for their genomic position relative to resistance and virulence loci.
-
-### Self-Contained Interactive HTML Report
-Every MOSTAR run produces a single, portable HTML report requiring no server or external dependencies. The report includes circular genome maps with zoomable, cursor-tracked pan functionality, a colour-coded complete resistome table, prophage annotations, mobile resistome cross-reference, and a full software version manifest for reproducibility. All genome maps are embedded as base64-encoded images, ensuring the report remains fully self-contained for sharing and archiving.
+MOSTAR has been developed and tested on *S. aureus*, *B. fragilis*, as well as *H. influenzae* strains, but will work with any bacteria, as long as the correct genome size and ONT model are specified. The pipeline contains some of the most well known tools in bioinformatics, and is designed to be a "one-stop shop" for most bacterial analysis. Finally the pipeline provides result- and log files from every included tool. 
 
 ### MOSTAR - Workflow and run-modes 
 <p align="left">
@@ -58,7 +38,7 @@ Short-read quality trimming (Fastp)
 Short-read alignment to ONT consensus (BWA-MEM)
 Short-read polishing (Polypolish)
 
-#### Optional modules
+#### Optional tools
 Taxonomic classification (Kraken2 / EMU)
 Functional annotation (Bakta)
 ICE detection — Integrative and Conjugative Elements (MacSyFinder / CONJScan)
@@ -88,7 +68,7 @@ A successful run will contain the following output, including the final polished
 </pre>
 
 ### Installation (Conda)
-The installation has been designed to be as simple as possible. The included YML will create a separate environment with all the required dependencies. The only manual step is downloading and configuring databases. For some systems geNomad may become a dependency issue, if you encounter issues, follow the steps below.  
+The installation has been designed to be as simple as possible. The included YML will create a separate conda environment with all the required dependencies. The only manual step is downloading and configuring databases. For some systems geNomad may become a dependency issue. If you encounter installation hang-ups, remove geNomad from the YML and install it separatly.   
 
 ```bash
 # Download the repository
@@ -107,8 +87,7 @@ python -m pip install .
 # Test the install
 mostar --help
 
-
-# If you encounter installation pronblems, first remove geNomad from the YML, then do
+# If you encounter installation problems, first remove geNomad from the YML, then do
 conda env create -f environment.yml -v
 conda install -c conda-forge -c bioconda genomad 
 
@@ -127,6 +106,9 @@ conda activate mostar-env
 # Download AMRFinder+ database: 
 amrfinder -u
 
+# Download and install CONJScan (required for MacSyFinder)
+msf_data install CONJScan
+
 # Download bakta database (Specify light or full)
 bakta_db download --output <output-path> --type [light|full]
 
@@ -136,7 +118,7 @@ mkdir -p ~/kraken2_db && cd ~/kraken2_db
 wget https://genome-idx.s3.amazonaws.com/kraken/k2_pluspf_08gb_20240904.tar.gz
 tar -xvzf k2_pluspf_08gb_20240904.tar.gz
 
-# Download geNomad database in current directory, approx 1.5Gb 
+# Download geNomad database in current directory (or specify path), approx 1.5Gb 
 genomad download-database .
 ```
 

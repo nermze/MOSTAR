@@ -32,6 +32,7 @@ MOSTAR has been developed and tested on *S. aureus*, *B. fragilis*, as well as *
 * Long-read quality trimming (Filtlong)
 * De novo assembly (Flye)
 * ONT consensus polishing (Medaka)
+* Genome rotation (circlator)
 * AMR profiling (AMRFinder+)
 * Interactive HTML report
 
@@ -97,7 +98,7 @@ conda install -c conda-forge -c bioconda genomad
 conda install micromamba 
 micromamba env create -f environment.yml -v
 micromamba activate mostar_env
-pip install .
+python -m pip install .
 ```
 
 #### Setup and download Databases
@@ -132,10 +133,10 @@ genomad download-database .
 * Model
 * Output
   
-# Run MOSTAR in ONT-only mode: 
+# Run MOSTAR in ONT-only mode, assemble genome and perform AMR analysis. 
 mostar --ont ont.fq.gz --genome-size [size] --output [dir] --model [model]
 
-# Run MOSTAR in Hybrid mode:  
+# Run MOSTAR in Hybrid mode, assemble genome and perform AMR analysis.
 mostar --ont ont.fq.gz --genome-size [size] --output [dir] --model [model] --r1 R1.fq --r2 R2.fq 
   
 # The "Everything" Run (Taxonomy, Annotation, ICE, and Plasticity/Prophages):
@@ -175,12 +176,18 @@ mostar --ont ont_read.fastq.gz --r1 read1.fastq.gz --r2 read2.fastq.gz \
 
 # Interactive HTML-report 
 #### Species ID and QC-metrics for assembly
-The report features key run-metrics, including assembly statistics and number of contigs. The report is dynamic and will adapt to user input, as some of the tools like taxonomy and short-read polishing are optional.  
+The report features key run-metrics from Medaka (and Polypolish if hybrid), including assembly statistics and number of contigs. The report is dynamic and will adapt to user input, as some of the tools like taxonomy and short-read polishing are optional. If taxonomy has been enabled, the pipeline will automatically pass the identified species ID on to AMRFinder+. 
 <p align="left">
   <img src="assets/Run_statistics.png" 
        width="100%" alt="QC-Metrics">
 </p>
 
+### Mobile Resistome & Genomic Plasticity
+By including geNomad in the pipeline, MOSTAR will also detect plasmid-borne AMR genes, in addition prophages and their locations. 
+<p align="left">
+  <img src="assets/Plasticity.png" 
+       width="100%" alt="Mobile resistome and Plasticity">
+</p>
 
 #### Genome visualization
 The report will also draw interactive genome maps, with visualization of AMR-gene locations, direction, detected ICE, and GC-content. 
@@ -190,20 +197,24 @@ The report will also draw interactive genome maps, with visualization of AMR-gen
 </p>
 
 #### Integrative Conjugative Elements (ICE)
-If ICE detection has been enabled, the pipeline will extract coordinates from the annotation file, and display the results. 
+If any ICE's are detected by MacSyFinder CONJScan, the pipeline will also extract genomic coordinates from the annotation file provided by Bakta to visualize them on the map. Notice how AMR genes are located on the ICE-element. 
 <p align="left">
   <img src="assets/ICE_detection.png" 
        width="100%" alt="Circular Genome Visualization">
 </p>
 
 #### AMR+ Summary Table
-Finaly the report willl also feature a detailed AMR table. Plasmid-borne genes will be visualized in red.  
+Finaly the report willl also feature a detailed AMR table derived by NCBI AMRFinder+. Plasmid-borne genes will be color-coded distinct red.  
 <p align="left">
   <img src="assets/AMR_table.png" 
        width="100%" alt="AMR summary table">
 </p>
 
-
+### Software information
+<p align="left">
+  <img src="assets/Software.png" 
+       width="100%" alt="Software summary table">
+</p>
 
 # Packages & Dependencies (installed by yml)
 <pre>

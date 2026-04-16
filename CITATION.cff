@@ -29,14 +29,6 @@ references:
     doi: 10.1038/s41587-019-0072-8
   - type: article
     authors:
-      - family-names: Curry
-        given-names: Kristen D.
-    title: "Emu: species-level microbial community profiling of full-length 16S rRNA marker gene amplicon sequences"
-    journal: "Nature Methods"
-    year: 2022
-    doi: 10.1038/s41592-022-01520-4
-  - type: article
-    authors:
       - family-names: Schwengers
         given-names: Oliver
     title: "Bakta: rapid and standardized annotation of bacterial genomes via alignment-free sequence identification"

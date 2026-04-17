@@ -4,25 +4,24 @@ channels:
   - bioconda
   - defaults
 dependencies:
-  - python=3.10
+  - python=3.11
   # Core Assembly & Polishing 
   - flye
-  - medaka=2.2.0
+  - medaka
   - filtlong
   - polypolish
   # Pre-processing & Alignment
   - fastp
   - bwa
-  - samtools>=1.19
-  - bcftools>=1.19
+  - samtools
+  - bcftools
   - minimap2
   - circlator
   # Annotation & Profiling
   - bakta
   - ncbi-amrfinderplus
-  - blast>=2.15.0
+  - blast
   - kraken2
-  - emu
   # ICE & Conjugation Detection
   - macsyfinder
   # Plasticity & Mobile Elements
@@ -33,7 +32,7 @@ dependencies:
   - pandas
   - biopython
   # Supporting Utilities
-  - mamba
+  - micromamba
   - osfclient
   - wget
   - curl

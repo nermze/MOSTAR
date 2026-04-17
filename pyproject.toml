@@ -9,7 +9,7 @@ description = "A streamlined hybrid assembly and polishing pipeline for ONT and 
 authors = [{name = "Nermin Zecic", email = "nermze@gmail.com"}]
 readme = "README.md"
 license = {text = "MIT"}
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 
 [tool.setuptools]
 script-files = ["mostar"]

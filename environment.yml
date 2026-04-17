@@ -32,6 +32,7 @@ dependencies:
   - pandas
   - biopython
   # Supporting Utilities
+  - setuptools<70
   - micromamba
   - osfclient
   - wget

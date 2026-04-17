@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "mostar"
 version = "1.0.0"
-description = "A streamlined hybrid assembly and polishing pipeline for ONT and Illumina reads, includes AMR profiling and functional annotation"
+description = "A streamlined hybrid assembly and polishing pipeline for ONT and Illumina reads, includes AMR profiling, functional annotation, ICE-detection & plasmid-borne AMR"
 authors = [{name = "Nermin Zecic", email = "nermze@gmail.com"}]
 readme = "README.md"
 license = {text = "MIT"}

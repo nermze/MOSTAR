@@ -40,6 +40,58 @@ fi
 export PATH="$CONDA_PREFIX/bin:$PATH"
 
 # 3. Verify critical tools are strictly loading from Conda
+usage() {
+    cat <<'HELP'
+
+A comprehensive bioinformatics pipeline by Nermin Zecic <nermze@gmail.com>
+
+      __      __   __    ____  _______   __     _____
+      | |\  /| |  /  \  / ___| |_   _|  /  \   | __  \
+      | | \/ | | | || | \___ \   | |   / /\ \  | |_) /
+      |_|\__/|_|  \__/  |____/   |_|  /_/  \_\ |_\ \_\
+
+Assembly, Polishing, Annotation, ICE detection & AMR profiling (v1.0.0)
+
+Usage:
+  Hybrid mode:   mostar --ont reads.fq.gz -g 2.1m -o outdir --r1 R1.fq --r2 R2.fq
+  ONT-only mode: mostar --ont reads.fq.gz -g 2.1m -o outdir
+
+Required:
+  --ont           ONT long reads [.fastq.gz]
+  --genome-size   Estimated genome size [e.g. 2.1m, 5.0m, 4g]
+  --output        Output directory
+
+Assembly & polishing:
+  --model         Medaka model [Default: r1041_e82_400bps_sup_v5.2.0]
+  --r1 / --r2     Illumina paired reads — enables hybrid mode
+  --meta          Enable uneven-coverage mode in Flye [Default: off]
+
+Annotation:
+  --bakta-db      Path to Bakta database — enables annotation
+  --bakta-ref     Bakta reference GFF for locus-tag transfer
+  --complete      Tell Bakta all sequences are complete/circular
+
+Classification:
+  --kraken2-db     Path to Kraken2 database
+  --confidence    Kraken2 confidence threshold [Default: 0.1]
+
+Mobile element detection:
+  --ice           Run MacSyFinder CONJScan (requires --bakta-db)
+  --plasticity    Run geNomad plasmid/provirus detection
+  --genomad-db    Path to geNomad database [Default: ~/genomad_db]
+
+  --organism      Organism name for AMRFinder+ [e.g. Escherichia]
+  --threads       CPU threads [Default: 10]
+  --cleanup       Remove intermediate files after completion
+  --help          Show this message and exit
+
+MOSTAR v1.0.0
+HELP
+    exit 0
+}
+
+[[ "$1" == "--help" || "$1" == "-h" ]] && usage
+
 REQUIRED_TOOLS=(
     "flye" "medaka_consensus" "samtools" "bwa" "amrfinder"
 )
@@ -303,55 +355,6 @@ calc_assembly_stats() {
 # ------------------------------------------------------------------------------
 # usage — print help and exit
 # ------------------------------------------------------------------------------
-usage() {
-    cat <<'HELP'
-
-A comprehensive bioinformatics pipeline by Nermin Zecic <nermze@gmail.com>
-
-      __      __   __    ____  _______   __     _____
-      | |\  /| |  /  \  / ___| |_   _|  /  \   | __  \
-      | | \/ | | | || | \___ \   | |   / /\ \  | |_) /
-      |_|\__/|_|  \__/  |____/   |_|  /_/  \_\ |_\ \_\
-
-Assembly, Polishing, Annotation, ICE detection & AMR profiling (v1.0.0)
-
-Usage:
-  Hybrid mode:   mostar --ont reads.fq.gz -g 2.1m -o outdir --r1 R1.fq --r2 R2.fq
-  ONT-only mode: mostar --ont reads.fq.gz -g 2.1m -o outdir
-
-Required:
-  --ont           ONT long reads [.fastq.gz]
-  --genome-size   Estimated genome size [e.g. 2.1m, 5.0m, 4g]
-  --output        Output directory
-
-Assembly & polishing:
-  --model         Medaka model [Default: r1041_e82_400bps_sup_v5.2.0]
-  --r1 / --r2     Illumina paired reads — enables hybrid mode
-  --meta          Enable uneven-coverage mode in Flye [Default: off]
-
-Annotation:
-  --bakta-db      Path to Bakta database — enables annotation
-  --bakta-ref     Bakta reference GFF for locus-tag transfer
-  --complete      Tell Bakta all sequences are complete/circular
-
-Classification:
-  --kraken2-db     Path to Kraken2 database
-  --confidence    Kraken2 confidence threshold [Default: 0.1]
-
-Mobile element detection:
-  --ice           Run MacSyFinder CONJScan (requires --bakta-db)
-  --plasticity    Run geNomad plasmid/provirus detection
-  --genomad-db    Path to geNomad database [Default: ~/genomad_db]
-
-  --organism      Organism name for AMRFinder+ [e.g. Escherichia]
-  --threads       CPU threads [Default: 10]
-  --cleanup       Remove intermediate files after completion
-  --help          Show this message and exit
-
-MOSTAR v1.0.0
-HELP
-    exit 1
-}
 
 # ------------------------------------------------------------------------------
 # generate_html_report

@@ -82,10 +82,14 @@ conda install bioconda::mostar
 # Create a dedicated environment (recommended for production use)
 conda create -n mostar_env bioconda::mostar
 conda activate mostar_env
+
+# Run the program
+mostar --help
+
 ```
 
+### Manual install
 ```bash
-# To install manually 
 # Download the repository
 git clone https://github.com/nermze/mostar.git
 

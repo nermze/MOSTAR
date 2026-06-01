@@ -4,7 +4,8 @@
        width="100%" alt="MOSTAR-ASM Banner">
 </p>
 
-<p align="center">
+[![Bioconda](https://img.shields.io/conda/vn/bioconda/mostar.svg)](https://anaconda.org/bioconda/mostar)
+<p align="left">
   <img src="https://img.shields.io/badge/Maintained%3F-yes-green.svg" />
   <img src="https://img.shields.io/badge/License-MIT-blue.svg" />
   <img src="https://img.shields.io/badge/Bioinformatics-Pipeline-orange.svg" />
@@ -71,9 +72,21 @@ A successful run will contain the following output, including the final polished
 </pre>
 
 ### Installation (Conda)
-The installation has been designed to be as simple as possible. The included YML will create a separate conda environment with all the required dependencies. The only manual step is downloading and configuring databases. For some systems geNomad may become a dependency issue. If you encounter installation hang-ups, remove geNomad from the YML and install it separatly.   
+The installation has been designed to be as simple as possible using conda. If however installing manually, the included YML will create a separate conda environment with all the required dependencies. The only manual step is downloading and configuring databases. For some manual installaltions, geNomad may become a dependency issue. If you encounter installation hang-ups, remove geNomad from the YML and install it separatly.   
+
+### Conda (recommended)
+```bash
+conda install bioconda::mostar
+```
+
+### Create a dedicated environment (recommended for production use)
+```bash
+conda create -n mostar_env bioconda::mostar
+conda activate mostar_env
+```
 
 ```bash
+# To install manually 
 # Download the repository
 git clone https://github.com/nermze/mostar.git
 

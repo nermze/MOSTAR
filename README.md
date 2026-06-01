@@ -74,13 +74,12 @@ A successful run will contain the following output, including the final polished
 ### Installation (Conda)
 The installation has been designed to be as simple as possible using conda. If however installing manually, the included YML will create a separate conda environment with all the required dependencies. The only manual step is downloading and configuring databases. For some manual installaltions, geNomad may become a dependency issue. If you encounter installation hang-ups, remove geNomad from the YML and install it separatly.   
 
-### Conda (recommended)
+### Install using Bioconda (recommended)
 ```bash
+# To install MOSTAR in the current env
 conda install bioconda::mostar
-```
 
-### Create a dedicated environment (recommended for production use)
-```bash
+# Create a dedicated environment (recommended for production use)
 conda create -n mostar_env bioconda::mostar
 conda activate mostar_env
 ```

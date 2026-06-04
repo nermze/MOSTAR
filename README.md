@@ -122,7 +122,60 @@ micromamba activate mostar_env
 python -m pip install .
 ```
 
-#### Setup and download Databases
+### Docker
+
+The easiest way to run MOSTAR without managing a Conda environment.
+
+```bash
+# Pull the latest image
+docker pull nermze/mostar:latest
+
+# Basic usage — ONT-only mode
+docker run --rm \
+  -v /path/to/your/data:/data \
+  nermze/mostar \
+  --ont /data/reads.fq.gz \
+  --genome-size X.X(m, g or k) \
+  --model (default:r1041_e82_400bps_sup_v5.2.0) \
+  --output /data/output
+
+#Hybrid mode — ONT + Illumina
+docker run --rm \
+  -v /path/to/your/data:/data \
+  nermze/mostar \
+  --ont /data/reads.fq.gz \
+  --r1 /data/R1.fq.gz \
+  --r2 /data/R2.fq.gz \
+  --genome-size X.X(m, g or k) \
+  --model (default:r1041_e82_400bps_sup_v5.2.0) \
+  --output /data/output
+
+# Full run — all modules enabled
+docker run --rm \
+  -v /path/to/your/data:/data \
+  -v /path/to/databases:/databases \
+  nermze/mostar \
+  --ont /data/reads.fq.gz \
+  --r1 /data/R1.fq.gz \
+  --r2 /data/R2.fq.gz \
+  --genome-size X.X(m, g or k) \
+  --model (default:r1041_e82_400bps_sup_v5.2.0) \
+  --output /data/output \
+  --kraken2-db /databases/kraken2_db \
+  --bakta-db /databases/bakta_db \
+  --ice \
+  --genomad-db /databases/genomad_db \
+  --plasticity
+
+
+#Notes
+- `-v /path/to/your/data:/data` mounts your local data folder into the container — all input files and output results go here
+- `-v /path/to/databases:/databases` mounts your database folder — required for Kraken2, Bakta, and geNomad
+- `--rm` removes the container after the run completes
+- Output files are written to the mounted `/data` folder and accessible locally after the run
+```
+
+#### Setup and download Databases (Important to get full functionality and features)
 ```bash 
 # Activate env (if not activated)
 conda activate mostar_env 

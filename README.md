@@ -71,9 +71,6 @@ A successful run will contain the following output, including the final polished
   |- MOSTAR_Assembly.fasta
 </pre>
 
-### Installation (Conda)
-The installation has been designed to be as simple as possible using conda. If however installing manually, the included YML will create a separate conda environment with all the required dependencies. The only manual step is downloading and configuring databases. For some manual installaltions, geNomad may become a dependency issue. If you encounter installation hang-ups, remove geNomad from the YML and install it separatly.   
-
 ### Usage instructions & input files
 ```bash
 # Required:
@@ -95,6 +92,9 @@ mostar --ont ont_read.fastq.gz --r1 read1.fastq.gz --r2 read2.fastq.gz \
   --bakta-db db-light_path --ice \
   --genomad-db genomad_db_path --plasticity
 ```
+
+### Installation (Conda)
+The installation has been designed to be as simple as possible using conda. If however installing manually, the included YML will create a separate conda environment with all the required dependencies. The only manual step is downloading and configuring databases. For some manual installaltions, geNomad may become a dependency issue. If you encounter installation hang-ups, remove geNomad from the YML and install it separatly.   
 
 ### Install using Bioconda (recommended)
 ```bash

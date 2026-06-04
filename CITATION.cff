@@ -13,8 +13,8 @@ authors:
   - family-names: "Taksdal Stubhaug"
     given-names: "Tore"
     orcid: "https://orcid.org/0000-0002-9234-7532"
-title: "MOSTAR: Modular ONT-Short-read Taxonomic Assembly and Resistance pipeline"
-version: 1.0.0
+title: "MOSTAR - Modular ONT-Short-read Taxonomic Assembly and Resistome-Evolution pipeline"
+version: 1.0.1
 date-released: 2026-02-05
 url: "https://github.com/nermze/MOSTAR-ASM"
 

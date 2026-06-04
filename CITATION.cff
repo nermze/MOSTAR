@@ -4,15 +4,15 @@ authors:
   - family-names: "Zecic"
     given-names: "Nermin"
     orcid: "https://orcid.org/0009-0008-0687-424X"
-  - family-names: "Skaare"
-    given-names: "Dagfinn"
-    orcid: "https://orcid.org/0009-0009-4084-4156"
   - family-names: "Johannessen Wefring"
     given-names: "Helene"
     orcid: "https://orcid.org/0000-0002-1743-5321"
   - family-names: "Taksdal Stubhaug"
     given-names: "Tore"
     orcid: "https://orcid.org/0000-0002-9234-7532"
+  - family-names: "Skaare"
+    given-names: "Dagfinn"
+    orcid: "https://orcid.org/0009-0009-4084-4156"
 title: "MOSTAR - Modular ONT-Short-read Taxonomic Assembly and Resistome-Evolution pipeline"
 version: 1.0.1
 date-released: 2026-02-05

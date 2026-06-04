@@ -74,6 +74,28 @@ A successful run will contain the following output, including the final polished
 ### Installation (Conda)
 The installation has been designed to be as simple as possible using conda. If however installing manually, the included YML will create a separate conda environment with all the required dependencies. The only manual step is downloading and configuring databases. For some manual installaltions, geNomad may become a dependency issue. If you encounter installation hang-ups, remove geNomad from the YML and install it separatly.   
 
+### Usage instructions & input files
+```bash
+# Required:
+* ONT-reads
+* Genome size 
+* Model
+* Output
+  
+# Run MOSTAR in ONT-only mode, assemble genome and perform AMR analysis. 
+mostar --ont ont.fq.gz --genome-size [size] --output [dir] --model [model]
+
+# Run MOSTAR in Hybrid mode, assemble genome and perform AMR analysis.
+mostar --ont ont.fq.gz --genome-size [size] --output [dir] --model [model] --r1 R1.fq --r2 R2.fq 
+  
+# The "Everything" Run (Taxonomy, Annotation, ICE, and Plasticity/Prophages):
+mostar --ont ont_read.fastq.gz --r1 read1.fastq.gz --r2 read2.fastq.gz \
+  --genome-size 1.9m --output Output \
+  --kraken2-db kraken2_db_path \
+  --bakta-db db-light_path --ice \
+  --genomad-db genomad_db_path --plasticity
+```
+
 ### Install using Bioconda (recommended)
 ```bash
 # To install MOSTAR in the current env
@@ -199,27 +221,6 @@ tar -xvzf k2_pluspf_08gb_20240904.tar.gz
 genomad download-database .
 ```
 
-### Usage instructions & input files
-```bash
-# Required:
-* ONT-reads
-* Genome size 
-* Model
-* Output
-  
-# Run MOSTAR in ONT-only mode, assemble genome and perform AMR analysis. 
-mostar --ont ont.fq.gz --genome-size [size] --output [dir] --model [model]
-
-# Run MOSTAR in Hybrid mode, assemble genome and perform AMR analysis.
-mostar --ont ont.fq.gz --genome-size [size] --output [dir] --model [model] --r1 R1.fq --r2 R2.fq 
-  
-# The "Everything" Run (Taxonomy, Annotation, ICE, and Plasticity/Prophages):
-mostar --ont ont_read.fastq.gz --r1 read1.fastq.gz --r2 read2.fastq.gz \
-  --genome-size 1.9m --output Output \
-  --kraken2-db kraken2_db_path \
-  --bakta-db db-light_path --ice \
-  --genomad-db genomad_db_path --plasticity
-```
 
 ### Command-Line Arguments
 |   Required   |   Tool/Name  | Description |

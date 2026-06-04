@@ -199,6 +199,7 @@ docker run --rm \
 
 #### Setup and download Databases (Important to get full functionality and features)
 ```bash 
+# Remember to run these commands post install in the appropriate env
 # Activate env (if not activated)
 conda activate mostar_env 
   

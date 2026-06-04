@@ -1,13 +1,11 @@
-FROM continuumio/miniconda3:latest
+FROM condaforge/mambaforge:latest
 
 LABEL maintainer="nermze@gmail.com"
 LABEL version="1.0.1"
 LABEL description="MOSTAR - Modular ONT-Short-read Taxonomic Assembly and Resistome-Evolution pipeline"
 
-# Install mostar and all dependencies from bioconda
-RUN conda install -y -c bioconda -c conda-forge mostar=1.0.1 && \
-    conda clean -afy
+RUN mamba install -y -c bioconda -c conda-forge python=3.11 mostar=1.0.1 && \
+    mamba clean -afy
 
-# Set entrypoint
 ENTRYPOINT ["mostar"]
 CMD ["--help"]

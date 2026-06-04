@@ -83,6 +83,11 @@ conda install bioconda::mostar
 conda create -n mostar_env bioconda::mostar
 conda activate mostar_env
 
+# If encountering problems with python version
+conda create --name mostar_env python=3.11
+conda activate mostar_env
+conda install bioconda::mostar
+
 # Run the program
 mostar --help
 
@@ -120,7 +125,7 @@ python -m pip install .
 #### Setup and download Databases
 ```bash 
 # Activate env (if not activated)
-conda activate mostar-env 
+conda activate mostar_env 
   
 # Download AMRFinder+ database: 
 amrfinder -u

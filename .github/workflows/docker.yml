@@ -3,7 +3,8 @@ name: Build and Push Docker Image
 on:
   push:
     tags:
-      - "v*"          # triggers on tags like v1.0.1, v1.1.0 etc
+      - "v*"  # triggers on tags like v1.0.1, v1.1.0 etc
+workflow_dispatch:
 
 jobs:
   docker:

@@ -102,10 +102,6 @@ The installation has been designed to be as simple as possible using conda. If h
 conda install bioconda::mostar
 
 # Create a dedicated environment (recommended for production use)
-conda create -n mostar_env bioconda::mostar
-conda activate mostar_env
-
-# If encountering problems with python version
 conda create --name mostar_env python=3.11
 conda activate mostar_env
 conda install bioconda::mostar

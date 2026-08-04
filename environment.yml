@@ -19,8 +19,9 @@ dependencies:
   - circlator
   # Annotation & Profiling
   - bakta=1.11.4
-  - pyhmmer=0.10.15
+  - pyhmmer<0.11
   - hmmer=3.4
+  - alive-progress=3.0.1
   - ncbi-amrfinderplus
   - blast
   - kraken2

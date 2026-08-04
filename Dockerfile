@@ -4,12 +4,19 @@ LABEL maintainer="nermze@gmail.com"
 LABEL version="1.0.2"
 LABEL description="MOSTAR - Modular ONT-Short read Taxonomic Assembly and Resistome-Evolution pipeline"
 
-COPY environment.yml /tmp/environment.yml
+WORKDIR /opt/mostar
 
-RUN mamba env create -f /tmp/environment.yml -n mostar_env && \
+COPY environment.yml .
+RUN mamba env create -f environment.yml -n mostar_env && \
     mamba clean -afy
 
-ENV PATH=/opt/conda/envs/mostar_env/bin:$PATH
+COPY . .
+RUN /opt/conda/envs/mostar_env/bin/python -m pip install --no-deps .
 
-ENTRYPOINT ["mostar"]
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+WORKDIR /data
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["--help"]

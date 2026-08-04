@@ -18,7 +18,9 @@ dependencies:
   - minimap2
   - circlator
   # Annotation & Profiling
-  - bakta
+  - bakta=1.11.4
+  - pyhmmer=0.10.15
+  - hmmer=3.4
   - ncbi-amrfinderplus
   - blast
   - kraken2

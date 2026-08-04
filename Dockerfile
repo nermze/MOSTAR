@@ -4,7 +4,7 @@ LABEL maintainer="nermze@gmail.com"
 LABEL version="1.0.2"
 LABEL description="MOSTAR - Modular ONT-Short read Taxonomic Assembly and Resistome-Evolution pipeline"
 
-RUN mamba install -y -c bioconda -c conda-forge python=3.11 mostar=1.0.1 && \
+RUN mamba install -y -c bioconda -c conda-forge python=3.11 mostar=1.0.2 && \
     mamba clean -afy
 
 ENV PATH="/opt/conda/bin:$PATH"

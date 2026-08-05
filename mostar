@@ -1362,7 +1362,7 @@ def draw_map(record, filename, centre_label, ice_df, phage_df, amr_df, is_main=F
 
     if not ice_df.empty:
         contig_ice = ice_df[ice_df['Contig'].astype(str).str.split().str[0] == cid_clean]
-        if contig_ice.empty and record == records[0]:
+        if contig_ice.empty and record is records[0]:
             contig_ice = ice_df
 
         for _, row in contig_ice.iterrows():

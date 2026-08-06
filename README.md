@@ -76,9 +76,12 @@ A successful run will contain the following output, including the final polished
 # Required:
 * ONT-reads
 * Genome size 
-* Model
+* Model (leave blank if r1041_e82_400bps_sup_v5.2.0)
 * Output
-  
+
+
+##### CONDA instructions ######
+
 # Run MOSTAR in ONT-only mode, assemble genome and perform AMR analysis. 
 mostar --ont ont.fq.gz --genome-size [size] --output [dir] --model [model]
 
@@ -91,18 +94,43 @@ mostar --ont ont_read.fastq.gz --r1 read1.fastq.gz --r2 read2.fastq.gz \
   --kraken2-db kraken2_db_path \
   --bakta-db db-light_path --ice \
   --genomad-db genomad_db_path --plasticity
+
+
+##### DOCKER instructions #####
+
+# Get the latest Docker image
+
+docker pull nermze/mostar:latest
+
+# Run MOSTAR - (In this example, all input files and databases are in the same folder)
+
+docker run --rm \
+  -v "$(pwd)":/data \
+  -v "$(pwd)/databases":/databases \
+  nermze/mostar \
+  --ont /data/reads.fq.gz \
+  --r1 /data/R1.fq.gz \ (omit if not available)
+  --r2 /data/R2.fq.gz \ (omit if not available)
+  --genome-size X.Xm (g, or k) \
+  --output /data/output \
+  --kraken2-db /databases/kraken2_db \
+  --bakta-db /databases/db-light \
+  --ice \
+  --genomad-db /databases/genomad_db \
+  --plasticity
+
 ```
 
-### Installation (Conda)
-The installation has been designed to be as simple as possible using conda. If however installing manually, the included YML will create a separate conda environment with all the required dependencies. The only manual step is downloading and configuring databases. For some manual installaltions, geNomad may become a dependency issue. If you encounter installation hang-ups, remove geNomad from the YML and install it separatly.   
+### Installation 
+The installation supports both Conda and Docker. If however installing manually, the included YML will create a separate conda environment with all the required dependencies. The only manual step is downloading and configuring databases. For some manual installaltions, geNomad may become a dependency issue. If you encounter installation hang-ups, remove geNomad from the YML and install it separatly.
 
 ### Install using Bioconda (recommended)
 ```bash
 # To install MOSTAR in the current env
 conda install bioconda::mostar
 
-# Create a dedicated environment (recommended for production use)
-conda create --name mostar_env python=3.11
+# Create a dedicated environment (recommended)
+conda create -n mostar_env python=3.11 biopython=1.84
 conda activate mostar_env
 conda install bioconda::mostar
 
@@ -111,7 +139,62 @@ mostar --help
 
 ```
 
-### Manual install
+### Docker
+
+The easiest way to run MOSTAR without managing a Conda environment.
+
+```bash
+# Pull the latest image
+docker pull nermze/mostar:latest
+
+# Basic usage — ONT-only mode
+docker run --rm \
+  -v /path/to/your/data:/data \
+  -v /path/to/databases:/databases \
+  nermze/mostar \
+  --ont /data/reads.fq.gz \
+  --genome-size X.X(m, g or k) \
+  --model (default:r1041_e82_400bps_sup_v5.2.0)
+  --output /data/output \
+
+#Hybrid mode — ONT + Illumina
+docker run --rm \
+  -v /path/to/your/data:/data \
+  -v /path/to/databases:/databases \
+  nermze/mostar \
+  --ont /data/reads.fq.gz \
+  --r1 /data/R1.fq.gz \
+  --r2 /data/R2.fq.gz \
+  --genome-size X.X(m, g or k) \
+  --model (default:r1041_e82_400bps_sup_v5.2.0) \
+  --output /data/output
+
+# Full run — all modules enabled + Hybrid mode
+docker run --rm \
+  -v /path/to/your/data:/data \
+  -v /path/to/databases:/databases \
+  nermze/mostar \
+  --ont /data/reads.fq.gz \
+  --r1 /data/R1.fq.gz \
+  --r2 /data/R2.fq.gz \
+  --genome-size X.X(m, g or k) \
+  --model (default:r1041_e82_400bps_sup_v5.2.0) \
+  --output /data/output \
+  --kraken2-db /databases/kraken2_db \
+  --bakta-db /databases/bakta_db \
+  --ice \
+  --genomad-db /databases/genomad_db \
+  --plasticity
+
+
+#Notes
+- `-v /path/to/your/data:/data` mounts your local data folder into the container — all input files and output results go here
+- `-v /path/to/databases:/databases` mounts your database folder — required for Kraken2, Bakta, and geNomad
+- `--rm` removes the container after the run completes
+- Output files are written to the mounted `/data` folder and accessible locally after the run
+```
+
+### Manual install 
 ```bash
 # Download the repository
 git clone https://github.com/nermze/mostar.git
@@ -140,63 +223,12 @@ micromamba activate mostar_env
 python -m pip install .
 ```
 
-### Docker
-
-The easiest way to run MOSTAR without managing a Conda environment.
-
-```bash
-# Pull the latest image
-docker pull nermze/mostar:latest
-
-# Basic usage — ONT-only mode
-docker run --rm \
-  -v /path/to/your/data:/data \
-  nermze/mostar \
-  --ont /data/reads.fq.gz \
-  --genome-size X.X(m, g or k) \
-  --model (default:r1041_e82_400bps_sup_v5.2.0) \
-  --output /data/output
-
-#Hybrid mode — ONT + Illumina
-docker run --rm \
-  -v /path/to/your/data:/data \
-  nermze/mostar \
-  --ont /data/reads.fq.gz \
-  --r1 /data/R1.fq.gz \
-  --r2 /data/R2.fq.gz \
-  --genome-size X.X(m, g or k) \
-  --model (default:r1041_e82_400bps_sup_v5.2.0) \
-  --output /data/output
-
-# Full run — all modules enabled
-docker run --rm \
-  -v /path/to/your/data:/data \
-  -v /path/to/databases:/databases \
-  nermze/mostar \
-  --ont /data/reads.fq.gz \
-  --r1 /data/R1.fq.gz \
-  --r2 /data/R2.fq.gz \
-  --genome-size X.X(m, g or k) \
-  --model (default:r1041_e82_400bps_sup_v5.2.0) \
-  --output /data/output \
-  --kraken2-db /databases/kraken2_db \
-  --bakta-db /databases/bakta_db \
-  --ice \
-  --genomad-db /databases/genomad_db \
-  --plasticity
-
-
-#Notes
-- `-v /path/to/your/data:/data` mounts your local data folder into the container — all input files and output results go here
-- `-v /path/to/databases:/databases` mounts your database folder — required for Kraken2, Bakta, and geNomad
-- `--rm` removes the container after the run completes
-- Output files are written to the mounted `/data` folder and accessible locally after the run
-```
-
 #### Setup and download Databases (Important to get full functionality and features)
 ```bash 
 # Remember to run these commands post install in the appropriate env
 # Activate env (if not activated)
+# Note when running Docker, CONJScan and NCBI-Amrfinder+ database are installed automatically. 
+
 conda activate mostar_env 
   
 # Download AMRFinder+ database: 
@@ -308,23 +340,27 @@ Finaly the report willl also feature a detailed AMR table derived by NCBI AMRFin
 
 
 # Troubleshooting, known issues & tips
+
+#### If the pipeline stops mid-way, or gets stuck on a specific tool
+The issue can usually be quickly identified by reviewing the tool-specific log-files in the output-folder. For example if the pipeline fails during the annotation step, navigate to output > logs > bakta.log.   
+
 #### Medaka Model Selection
-If --model is not specified, MOSTAR defaults to r1041_e82_400bps_sup_v5.2.0, which corresponds to R10.4.1 flowcells basecalled with the Super Accuracy model at 400 bps. This default is appropriate for most modern ONT runs but must be changed if your data was generated on a different flowcell or basecalling configuration — using the wrong model is one of the most common causes of poor polishing outcomes. To list all models available in your Medaka installation, run: hmedaka tools list_models
+If --model is not specified, MOSTAR defaults to r1041_e82_400bps_sup_v5.2.0, which corresponds to R10.4.1 flowcells basecalled with the Super Accuracy model at 400 bps. This default is appropriate for most modern ONT runs but must be changed if your data was generated on a different flowcell or basecalling configuration — using the wrong model is one of the most common causes of poor polishing outcomes. To list all models available in your Medaka installation, run: medaka tools list_models
 
 #### ICE Detection Requires Functional Annotation
 The --ice module depends on protein sequences produced by Bakta to query the MacSyFinder CONJScan database. If --bakta-db is not provided, Bakta annotation is skipped and no .faa file will be produced, causing ICE detection to be silently bypassed. Always pair --ice with --bakta-db to ensure this module runs. If you see the warning No protein file found — skipping ICE detection, this is the cause.
 
 #### Taxonomic Classification and AMRFinder+ Point Mutation Models
 When --kraken2-db is provided, MOSTAR uses the top-confidence Kraken2 hit to identify the organism and passes it to AMRFinder+ as the --organism flag, enabling species-specific point mutation screening in addition to gene-based resistance detection. Point mutation models are only available for a subset of clinically relevant organisms. If your organism is not supported, AMRFinder+ will still run in gene-detection mode without point mutations. To see all supported organisms, run: amrfinder --list_organisms
-If you know your organism and want to override automatic detection, or if you are running without a Kraken2 database, use: --organism Klebsiella
-Leave --organism unset if the organism is unknown — AMRFinder+ will still provide a complete gene-level resistome profile.
+
+If you know your organism and want to override automatic detection for AMRFinder+, or if you are running without a Kraken2 database, use: --organism 
 
 #### Uneven Coverage and Metagenome-like Assemblies
 If your assembly is fragmented, missing expected genomic features, or producing an unusually high contig count, your sample may have uneven read depth — common in direct clinical extractions, environmental samples, mixed cultures, or plasmid-enriched preps. Re-run with the --meta flag to enable Flye's uneven-coverage assembly mode, which does not assume uniform depth across the genome: mostar --ont reads.fq.gz --genome-size 5m --output outdir --meta
 Note that --meta mode disables some of Flye's coverage-based error correction, so it should only be used when standard assembly fails or produces poor results.
 
 #### Low Polypolish Coverage in Hybrid Mode
-If the hybrid polishing step reports mean read depth: 0.0x across all contigs, your Illumina reads are likely incomplete, truncated, or mismatched to the assembly. Verify your R1/R2 files are complete and correctly paired before re-running. MOSTAR validates that these files exist and are non-empty at startup, but cannot detect partially downloaded or corrupted files. Check read counts with: hecho $(( $(wc -l < R1.fastq) / 4 )) reads
+If the hybrid polishing step reports mean read depth: 0.0x across all contigs, your Illumina reads are likely incomplete, truncated, or mismatched to the assembly. Verify your R1/R2 files are complete and correctly paired before re-running. MOSTAR validates that these files exist and are non-empty at startup, but cannot detect partially downloaded or corrupted files. Check read counts with: echo $(( $(wc -l < R1.fastq) / 4 )) reads
 A genome of ~5 Mb requires approximately 500,000 paired reads at 100 bp for 10× Polypolish coverage.
 
 #### Output Directory Conflicts

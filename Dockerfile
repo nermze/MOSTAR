@@ -1,7 +1,7 @@
 FROM condaforge/mambaforge:latest
 
 LABEL maintainer="nermze@gmail.com"
-LABEL version="1.0.3"
+LABEL version="1.0.4"
 LABEL description="MOSTAR - Modular ONT-Short read Taxonomic Assembly and Resistome-Evolution pipeline"
 
 WORKDIR /opt/mostar

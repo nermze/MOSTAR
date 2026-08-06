@@ -16,9 +16,12 @@
   <img src="https://img.shields.io/badge/v1.0.0-Initial release-green.svg" />
 </p>
 
-MOSTAR is comprehensive bioinformatics pipeline for microbial analysis of whole-genome Oxford Nanopore sequencing data (ONT-reads). The pipeline constructs highly-polished genomes (using hybrid- or non-hybrid assembly), in addition to performing functional annotation, AMR profiling, ICE detection, and taxonomic classification — with built-in quality controls and an interactive HTML report. The pipeline bridges the gap between long-read and short-read technology, its name is therefore inspired by the historic Stari Most (Old Bridge) of Mostar, a symbol of connection and cultural resilience.  
+MOSTAR is comprehensive bioinformatics pipeline for microbial analysis of whole-genome Oxford Nanopore sequencing data (ONT-reads). The pipeline constructs highly-polished genomes (using hybrid- or non-hybrid assembly), in addition to performing functional annotation, AMR profiling, ICE detection, and taxonomic classification — with built-in quality controls and an interactive HTML report. 
 
-MOSTAR has been developed and tested on *S. aureus*, *B. fragilis*, as well as *H. influenzae* strains, but will work with any bacteria, as long as the correct genome size and ONT model are specified. The pipeline contains some of the most well known tools in bioinformatics, and is designed to be a "one-stop shop" for most bacterial analysis. Finally the pipeline provides result- and log files from every included tool. 
+This pipeline has been developed and tested on *S. aureus*, *B. fragilis*, as well as *H. influenzae* strains, but will work with any bacteria, as long as the correct genome size and ONT model are specified. The pipeline contains some of the most well known tools in bioinformatics, and is designed to be a "one-stop shop" for most bacterial analysis. Finally the pipeline provides result- and log files from every included tool. 
+
+*The pipeline was built as a way of bridging the gap between long-read and short-read technology, its name is therefore inspired by the historic Stari Most (Old Bridge) of Mostar.* 
+
 
 ### MOSTAR - Workflow and run-modes 
 <p align="left">
@@ -139,10 +142,7 @@ mostar --help
 
 ```
 
-### Docker
-
-The easiest way to run MOSTAR without managing a Conda environment.
-
+### Docker - The easiest way to run MOSTAR without managing a Conda environment.
 ```bash
 # Pull the latest image
 docker pull nermze/mostar:latest

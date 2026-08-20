@@ -285,38 +285,52 @@ genomad download-database .
   
 
 # Interactive HTML-report 
-#### Species ID and QC-metrics for assembly
-The report features key run-metrics from Medaka (and Polypolish if hybrid), including assembly statistics and number of contigs. The report is dynamic and will adapt to user input, as some of the tools like taxonomy and short-read polishing are optional. If taxonomy has been enabled, the pipeline will automatically pass the identified species ID on to AMRFinder+. 
+### Species ID and QC-metrics for assembly
+MOSTAR generates comprehensive, standalone HTML report designed for both quick clinical overview, as well as deep genomic exploration. The report offers dynamic metrics based on run type, including assembly statistics, total genome size, N50 and number of contigs. If taxonomy has been enabled, the identified species will be passed on to AMTFinder+ for organism-specific point-mutation detection. 
 <p align="left">
   <img src="assets/Run_statistics.png" 
        width="100%" alt="QC-Metrics">
 </p>
 
 ### Mobile Resistome & Genomic Plasticity
-By including geNomad in the pipeline, MOSTAR will also detect plasmid-borne AMR genes, in addition prophages and their locations. 
+By integrating geNomad, MOSTAR goes beyond simple gene detection by evaluating the context of antimicrobial resistance. The pipeline actively also flags AMR genes located on extrachromosomal plasmids. Because plasmid-borne resistance can rapidly transfer horizontally between different bacteria, these elements are highlighted as elevated clinical risks, providing critical epidemiological context.
 <p align="left">
   <img src=".supplementary/Mobile_resitome_profile.png" 
        width="100%" alt="Mobile resistome and Plasticity">
 </p>
 
-#### Genome visualization
-The report will also draw interactive genome maps, with visualization of AMR-gene locations, direction, detected ICE, and GC-content. 
+### Prophage Tracker
+Bacteriophages act as major drivers of bacterial evolution and can frequently carry accessory genes that enhance pathogenicity. The table reports the exact location, length, and a confidence score for each viral region, categorizing them as intact or incomplete to help you identify active mobilization threats.
 <p align="left">
-  <img src="assets/Multiple_contigs.png" 
+  <img src=".supplementary/Prophage_tracker.png" 
+       width="100%" alt="Prophage Tracker">
+</p>
+
+### Integrons
+Integrons are powerful genetic elements capable of capturing and expressing mobile gene cassettes (often AMR genes) via site-specific recombination. 
+<p align="left">
+  <img src=".supplementary/Integron_profile.png" 
+       width="100%" alt="Integron Profile">
+</p>
+
+### Genome visualization
+The report will also draw interactive genome maps, with visualization of AMR-gene locations, direction, detected ICE, integrons, and GC-content. 
+<p align="left">
+  <img src=".supplementary/E.coli_main.png" 
        width="100%" alt="Circular Genome Visualization">
 </p>
 
-#### Integrative Conjugative Elements (ICE)
-If any ICE's are detected by MacSyFinder CONJScan, the pipeline will also extract genomic coordinates from the annotation file provided by Bakta to visualize them on the map. Notice how AMR genes are located on the ICE-element. 
+### Integrative Conjugative Elements (ICE)
+If any ICE's are detected by MacSyFinder CONJScan, the pipeline will also extract genomic coordinates from the annotation file provided by Bakta to visualize them on the map. Notice how AMR genes are located on the ICE-element. ICE's are self-transmissible mobile elements involved in the spread of antibiotic resistance. 
 <p align="left">
   <img src="assets/ICE_detection.png" 
        width="100%" alt="Circular Genome Visualization">
 </p>
 
-#### AMR+ Summary Table
+### AMR+ Summary Table
 Finaly the report willl also feature a detailed AMR table derived by NCBI AMRFinder+. Plasmid-borne genes will be color-coded distinct red.  
 <p align="left">
-  <img src="assets/AMR_table.png" 
+  <img src=".supplementary/Resistome_profile.png" 
        width="100%" alt="AMR summary table">
 </p>
 

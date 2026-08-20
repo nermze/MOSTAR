@@ -5,7 +5,7 @@ trap 'echo "[ERROR] Pipeline failed at line $LINENO"; exit 1' ERR
 # ==============================================================================
 #  MOSTAR - Microbial Oxford Sequencing: Typing, Assembly & Resistome
 #  Author  : Nermin Zecic <nermze@gmail.com>
-#  Version : 1.0.4
+#  Version : 1.0.5
 #  License : MIT
 # ==============================================================================
 #
@@ -724,7 +724,7 @@ PYICE
             <p style='color:#7f8c8d; font-size:0.85rem; margin-bottom:1rem; line-height:1.5;'>
                 Integrative and Conjugative Elements (ICEs) and other secretion systems are massive mobile genetic elements capable of self-transfer between bacteria via conjugation. They are primary vehicles for the horizontal spread of antibiotic resistance and virulence factors.
             </p>
-            <div class='alert-box alert-blue'>
+            <div class='alert-box alert-cyan'>
                 <strong>Total Conjugation Systems Detected:</strong>
                 <span class='big-num'>${ice_total}</span>
             </div>
@@ -825,7 +825,7 @@ PYINT
             <p style='color:#7f8c8d; font-size:0.85rem; margin-bottom:1rem; line-height:1.5;'>
                 Integrons are genetic elements capable of capturing and expressing mobile gene cassettes via site-specific recombination.
             </p>
-            <div class='alert-box alert-blue'>
+            <div class='alert-box alert-pink'>
                 <strong>Total Integrons Detected:</strong>
                 <span class='big-num'>${int_total}</span>
             </div>
@@ -919,6 +919,8 @@ PYINT
     .alert-red   { background: #fff5f5; border-left: 5px solid var(--red);   }
     .alert-green { background: #f0fff4; border-left: 5px solid var(--green); }
     .alert-blue  { background: #e1f5fe; border-left: 5px solid var(--blue);  }
+    .alert-cyan  { background: #e6ffff; border-left: 5px solid #00f2ff; color: #006080; }
+    .alert-pink  { background: #fdf2f7; border-left: 5px solid #e84393; color: #881b4c; }
     table { width: 100%; border-collapse: collapse; }
     th { padding: 12px 8px; border-bottom: 2px solid var(--border); text-align: left; font-size: 0.85rem; }
     td { padding: 10px 8px; border-bottom: 1px solid var(--border); font-size: 0.9rem; }

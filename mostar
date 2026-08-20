@@ -5,7 +5,7 @@ trap 'echo "[ERROR] Pipeline failed at line $LINENO"; exit 1' ERR
 # ==============================================================================
 #  MOSTAR - Microbial Oxford Sequencing: Typing, Assembly & Resistome
 #  Author  : Nermin Zecic <nermze@gmail.com>
-#  Version : 1.0.4
+#  Version : 1.0.5
 #  License : MIT
 # ==============================================================================
 #

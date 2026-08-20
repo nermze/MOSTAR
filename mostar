@@ -5,7 +5,7 @@ trap 'echo "[ERROR] Pipeline failed at line $LINENO"; exit 1' ERR
 # ==============================================================================
 #  MOSTAR - Microbial Oxford Sequencing: Typing, Assembly & Resistome
 #  Author  : Nermin Zecic <nermze@gmail.com>
-#  Version : 1.0.5
+#  Version : 1.0.4
 #  License : MIT
 # ==============================================================================
 #
@@ -376,6 +376,7 @@ generate_html_report() {
     local mobile_section="" 
     local phage_section=""
     local integron_section=""
+    local ice_section=""
     local maps_section="" 
     local map_content="" 
     local img b64 label
@@ -637,6 +638,116 @@ PYPHAGE
         </section>"
     fi
 
+    # ICE / Conjugation Systems section (MacSyFinder / CONJScan)
+    ice_section=""
+    local ice_best=$(find "$OUTDIR/ice_detection" -name "best_solution.tsv" 2>/dev/null | head -n1 || true)
+    
+    if [[ -f "$ice_best" ]]; then
+        local ice_html="<tr><td colspan='4' style='text-align:center; color:#7f8c8d;'>No conjugation systems detected</td></tr>"
+        local ice_total="0"
+
+        ice_raw=$(python3 - "$ice_best" <<'PYICE'
+import sys, pandas as pd
+try:
+    df = pd.read_csv(sys.argv[1], sep='\t', comment='#')
+    if df.empty: sys.exit(0)
+    
+    # Adapt to different MacSyFinder versions
+    rep_col = 'replicon' if 'replicon' in df.columns else df.columns[0]
+    sys_id_col = 'sys_id' if 'sys_id' in df.columns else 'system'
+    gene_col = 'gene_name' if 'gene_name' in df.columns else 'hit_id'
+    
+    rows = ""
+    total_systems = 0
+    
+    if rep_col in df.columns and sys_id_col in df.columns:
+        # Group by system ID (a system ID belongs to one replicon)
+        for (rep, sys_id), group in df.groupby([rep_col, sys_id_col]):
+            total_systems += 1
+            
+            # Extract System Type
+            sys_type = ""
+            if 'model_fqn' in group.columns:
+                sys_type = str(group['model_fqn'].iloc[0])
+            else:
+                sys_type = str(sys_id).rsplit('_', 1)[0]
+                
+            # Clean up sys_type (e.g. 'CONJScan/ICE/T4SS_typeF' becomes 'T4SS_typeF (ICE)')
+            if '/' in sys_type:
+                parts = sys_type.split('/')
+                if len(parts) >= 3:
+                    sys_type = f"{parts[-1]} ({parts[-2]})"
+                else:
+                    sys_type = parts[-1]
+            
+            # Extract Completeness
+            wholeness = "N/A"
+            if 'sys_wholeness' in group.columns:
+                try:
+                    w_val = float(group['sys_wholeness'].iloc[0])
+                    wholeness = f"{w_val:.2f}"
+                except:
+                    pass
+            
+            # Extract Genes/Contents
+            elements = []
+            if gene_col in group.columns:
+                for val in group[gene_col].dropna():
+                    clean_val = str(val).split('-NCBIFAM')[0].replace('_like', '')
+                    elements.append(f"<span style='background:#f1f2f6; padding:2px 6px; border-radius:4px; border:1px solid #dcdde1; margin-right:4px; display:inline-block; margin-bottom:4px;'>{clean_val}</span>")
+            contents = "".join(elements)
+            
+            rows += (
+                f"<tr>"
+                f"<td><strong>{rep}</strong></td>"
+                f"<td><strong style='color:#006080;'>{sys_type}</strong></td>"
+                f"<td>{wholeness}</td>"
+                f"<td style='font-size:0.85em; max-width: 300px; line-height: 1.6;'>{contents}</td>"
+                f"</tr>"
+            )
+            
+    if rows: 
+        print(f"{total_systems}:::{rows}")
+except Exception:
+    pass
+PYICE
+        )
+        
+        # Split the python output into the total count and the HTML rows
+        if [[ "$ice_raw" == *":::"* ]]; then
+            ice_total=$(echo "$ice_raw" | awk -F':::' '{print $1}')
+            ice_html=$(echo "$ice_raw" | awk -F':::' '{print $2}')
+        fi
+
+        ice_section="<section class='card'>
+            <h2>Integrative &amp; Conjugative Elements (ICE)</h2>
+            <p style='color:#7f8c8d; font-size:0.85rem; margin-bottom:1rem; line-height:1.5;'>
+                Integrative and Conjugative Elements (ICEs) and other secretion systems are massive mobile genetic elements capable of self-transfer between bacteria via conjugation. They are primary vehicles for the horizontal spread of antibiotic resistance and virulence factors.
+            </p>
+            <div class='alert-box alert-blue'>
+                <strong>Total Conjugation Systems Detected:</strong>
+                <span class='big-num'>${ice_total}</span>
+            </div>
+            <table class='resistome-table' id='iceTable'>
+                <thead>
+                    <tr>
+                        <th>Replicon</th>
+                        <th>System Type</th>
+                        <th>Completeness</th>
+                        <th>System Contents (Genes)</th>
+                    </tr>
+                </thead>
+                <tbody>${ice_html}</tbody>
+            </table>
+            <ul style='color:#7f8c8d; font-size:0.85rem; line-height:1.6; margin-top:1rem;'>
+                <li><strong>Replicon:</strong> The genomic contig or plasmid where the conjugative system was localized.</li>
+                <li><strong>System Type:</strong> The classification of the secretion system (e.g., T4SS, ICE, IME).</li>
+                <li><strong>Completeness:</strong> A wholeness score (where 1.0 = 100%) indicating how many core mandatory genes of the system's model were successfully identified.</li>
+                <li><strong>System Contents:</strong> The structural and functional genes that construct the secretion apparatus and conjugation machinery.</li>
+            </ul>
+        </section>"
+    fi
+
         # Integron section (IntegronFinder)
     integron_section=""
     if [[ "$RUN_INTEGRONS" == "true" ]]; then
@@ -870,6 +981,7 @@ PYINT
 ${METRICS_BLOCK}
 ${mobile_section}
 ${phage_section}
+${ice_section}
 ${integron_section}
 <div class="card">
     <h2>Colour Legend for circular genomes</h2>

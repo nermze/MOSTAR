@@ -20,6 +20,9 @@ dependencies:
   # Annotation & Profiling
   - bakta=1.11.4
   - pyhmmer<0.11
+  - integron_finder
+  - prodigal
+  - infernal
   - hmmer=3.4
   - alive-progress=3.0.1
   - ncbi-amrfinderplus
@@ -40,3 +43,7 @@ dependencies:
   - osfclient
   - wget
   - curl
+  - pip
+  # Bypass OS limitations
+  - pip:
+    - integron_finder>=2.0

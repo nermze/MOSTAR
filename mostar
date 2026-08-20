@@ -19,6 +19,7 @@ trap 'echo "[ERROR] Pipeline failed at line $LINENO"; exit 1' ERR
 #    - Taxonomic profiling (Kraken2)
 #    - Genomic plasticity & mobile elements (geNomad)
 #    - ICE / conjugative element detection (MacSyFinder / CONJScan)
+#    - Integrons (IntegronFinder)
 #    - Circular genome maps with GC, ICE, and AMR tracks
 #    - Interactive HTML report
 #
@@ -50,7 +51,7 @@ A comprehensive bioinformatics pipeline by Nermin Zecic <nermze@gmail.com>
       | | \/ | | | || | \___ \   | |   / /\ \  | |_) /
       |_|\__/|_|  \__/  |____/   |_|  /_/  \_\ |_\ \_\
 
-Assembly, Polishing, Annotation, ICE detection & AMR profiling (v1.0.4)
+Assembly, Polishing, Annotation, ICE detection & AMR profiling (v1.0.5)
 
 Usage:
   Hybrid mode:   mostar --ont reads.fq.gz -g 2.1m -o outdir --r1 R1.fq --r2 R2.fq
@@ -79,13 +80,16 @@ Mobile element detection:
   --ice           Run MacSyFinder CONJScan (requires --bakta-db)
   --plasticity    Run geNomad plasmid/provirus detection
   --genomad-db    Path to geNomad database [Default: ~/genomad_db]
+  --integrons     Run IntegronFinder
+  --eval          IntegronFinder e-value threshold [Default: 1e-9]  
 
+Other options:
   --organism      Organism name for AMRFinder+ [e.g. Escherichia]
   --threads       CPU threads [Default: 10]
   --cleanup       Remove intermediate files after completion
   --help          Show this message and exit
 
-MOSTAR v1.0.4
+MOSTAR v1.0.5
 HELP
     exit 0
 }
@@ -118,7 +122,7 @@ fi
 # ------------------------------------------------------------------------------
 # Constants
 # ------------------------------------------------------------------------------
-readonly VERSION="1.0.4"
+readonly VERSION="1.0.5"
 readonly START_TIME=$(date +%s)
 
 # ANSI colours
@@ -128,7 +132,7 @@ readonly GREEN='\033[0;32m'
 readonly NC='\033[0m'
 
 # Progress tracking
-TOTAL_STEPS=15
+TOTAL_STEPS=14
 CURRENT_STEP=0
 
 # ------------------------------------------------------------------------------
@@ -155,6 +159,7 @@ RUN_KRAKEN2=false
 RUN_ICE=false
 RUN_GENOMAD=false
 SKIP_BAKTA=false
+RUN_INTEGRONS=false
 
 # Runtime metrics — populated during the run
 FINAL_ASM=""
@@ -218,6 +223,7 @@ PIPELINE_STEPS=(
     "Annotation (Bakta)"
     "AMR Profiling (AMRFinder+)"
     "ICE Detection (MacSyFinder)"
+    "Integron Detection (IntegronFinder)"
     "Plasticity (geNomad)"
     "Generating Circular Maps"
     "Generating HTML Report"
@@ -231,6 +237,7 @@ DASHBOARD_DRAWN=""
 
 # ------------------------------------------------------------------------------
 # run_step (Dashboard Version)
+# ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------
 run_step() {
     local name="$1"
@@ -368,6 +375,7 @@ generate_html_report() {
     local full_amr_section="" 
     local mobile_section="" 
     local phage_section=""
+    local integron_section=""
     local maps_section="" 
     local map_content="" 
     local img b64 label
@@ -386,6 +394,7 @@ generate_html_report() {
     bwa_v=$(bwa 2>&1 | awk '/Version:/{print $NF}' || echo "N/A")
     filtlong_v=$(filtlong --version 2>/dev/null || echo "N/A")
     polypolish_v=$(polypolish --version 2>/dev/null || echo "N/A")
+    integron_finder_v=$(integron_finder --version 2>/dev/null || echo "N/A")
 
     local amr_tsv="$OUTDIR/amr_results/AMR_Report.tsv"
     local map_dir="$OUTDIR/amr_results/maps"
@@ -409,17 +418,17 @@ def row_color(cls, contig):
     # Clean the contig ID
     c_id = str(contig).split()[0].strip()
 
-    # 1. ULTIMATE PRIORITY: Is it on a plasmid? 
+    # Is it on a plasmid? 
     # If yes, it is ALWAYS RED (Even if it is virulence)
     if c_id != main_id:
         return '#e74c3c'
 
-    # 2. SECOND PRIORITY: Is it Virulence on the Main Chromosome?
+    #  Is it Virulence on the Main Chromosome?
     # If yes, it is BLACK
     if 'virulence' in c:
         return '#000000'
 
-    # 3. STANDARD COLORS: For AMR genes on the Main Chromosome
+    # STANDARD COLORS: For AMR genes on the Main Chromosome
     if any(x in c for x in ['beta-lactam', 'penicillin', 'carbapenem']): return '#3498db'
     if 'tetracycline'    in c: return '#9b59b6'
     if 'aminoglycoside'  in c: return '#e67e22'
@@ -457,42 +466,19 @@ PYAMR
         full_amr_section="<div class='card'>
             <h2>Complete Resistome Profile (AMRFinder+)</h2>
             <p>All identified resistance and virulence elements.</p>
+            <p style='color:#7f8c8d; font-size:0.85rem;'>
+                This table lists every antimicrobial resistance (AMR) and virulence gene identified by AMRFinder+ across the assembly.
+            </p>
+            <ul style='color:#7f8c8d; font-size:0.85rem; line-height:1.6;'>
+                <li><strong>Gene:</strong> The AMRFinder+ reference gene symbol matched in the assembly.</li>
+                <li><strong>Class:</strong> The antimicrobial drug class or resistance mechanism the gene is predicted to confer .</li>
+                <li><strong>Identity:</strong> The percent sequence identity between the detected gene and the AMRFinder+ reference sequence.</li>
+                <li><strong>Contig:</strong> Which assembled contig the gene was found on. Genes on smaller, non-chromosomal contigs may indicate plasmid-borne resistance.</li>
+            </ul>
             <div style='overflow-x:auto;'>
             ${amr_html}
             </div>
         </div>"
-    fi
-
-    # Mobile resistome section (geNomad)
-    mobile_section=""
-    if [[ "${RUN_GENOMAD}" == "true" ]]; then
-        mobile_section="<section class='card'>
-            <h2>Mobile Resistome &amp; Genomic Plasticity</h2>
-            <div class='alert-box alert-red'>
-                <strong>Plasmid-borne AMR detected:</strong>
-                <span class='big-num'>${HIGH_RISK_COUNT}</span>
-            </div>
-            <table class='resistome-table' id='resTable'>
-                <thead><tr><th>Gene</th><th>Contig</th><th>Class</th><th>Score</th><th>Risk</th></tr></thead>
-                <tbody></tbody>
-            </table>
-        </section>"
-    fi
-
-    # Prophage section (geNomad)
-    phage_section=""
-    if [[ "${RUN_GENOMAD}" == "true" ]]; then
-        phage_section="<section class='card'>
-            <h2>Prophage Tracker</h2>
-            <div class='alert-box alert-green'>
-                <strong>Total Prophages Detected:</strong>
-                <span class='big-num'>${PHAGE_COUNT}</span>
-            </div>
-            <table class='resistome-table' id='pTable'>
-                <thead><tr><th>Contig ID</th><th>Length</th><th>Score</th><th>Type</th></tr></thead>
-                <tbody></tbody>
-            </table>
-        </section>"
     fi
 
     # Circular map gallery — embed PNGs as base64
@@ -502,7 +488,7 @@ PYAMR
         for img in "$map_dir"/*.png; do
             [[ -f "$img" ]] || continue
             b64=$(base64 < "$img" | tr -d '\n')
-            label=$(basename "$img" .png | sed 's/_/ /g')
+            label=$(basename "$img" .png | sed -E 's/^[0-9]+_//; s/_/ /g')
             map_content+="<div class='map-card'>
                 <h4>$label</h4>
                 <div class='map-zoom-container'>
@@ -512,13 +498,250 @@ PYAMR
         done
         if [[ -n "$map_content" ]]; then
             maps_section="<div class='card'>
-                <h2>Circular Genome Maps</h2>
-                <p style='color:#7f8c8d; font-size:0.85rem;'>Click any map to zoom. Move mouse to pan while zoomed.</p>
-                <div class='map-grid'>$map_content</div>
-            </div>"
+    <h2>Circular Genome Maps</h2>
+    <p style='color:#7f8c8d; font-size:0.85rem;'>
+        This circular map summarizes the genome assembly's key genomic features across four
+        concentric tracks, read from the center outward:
+    </p>
+    <ul style='color:#7f8c8d; font-size:0.85rem; line-height:1.6;'>
+        <li><strong>Innermost (grey):</strong> GC content deviation from the genome-wide average, calculated in sliding windows around the sequence.</li>
+        <li><strong>Middle-inner (cyan):</strong> ICE / conjugation systems detected by MacSyFinder (CONJScan), labeled by system type and size in kb. Arrows indicate strand orientation.</li>
+        <li><strong>Middle-outer (green):</strong> Prophage regions identified by geNomad, labeled with size in kb.</li>
+        <li><strong>Outermost:</strong> AMR and virulence genes identified by AMRFinder+, color-coded by resistance class (see legend). On plasmid/extrachromosomal maps, all genes are shown in red regardless of class, reflecting the elevated horizontal transfer risk associated with plasmid-borne resistance determinants.</li>
+    </ul>
+    <p style='color:#7f8c8d; font-size:0.85rem;'>
+        The main chromosome is shown separately from any additional contigs (plasmids or extrachromosomal elements), each rendered as its own circular map.
+    </p>
+    <p style='color:#7f8c8d; font-size:0.85rem;'>
+        Note: Details about the detected ICE elements or AMR genes can be reviewed in their respective output folders. Mobile genetic elements identified by MacSyFinder with less than 50% system completeness are excluded from this visualization to reduce visual noise from low-confidence partial hits. All detected systems, including those below this threshold, are retained in <code>ice_detection/best_solution.tsv</code> for manual review.
+    </p>
+    <p style='color:#7f8c8d; font-size:0.85rem;'>
+        Hint: Click any map to zoom. Move mouse to pan while zoomed.
+    </p>
+    <div class='map-grid'>$map_content</div>
+    </div>"
         fi
     fi
 
+        # Mobile resistome section (geNomad)
+    mobile_section=""
+    if [[ "${RUN_GENOMAD}" == "true" ]]; then
+        local mob_csv="$OUTDIR/intermediate/mob_sum.csv"
+        local mob_html="<tr><td colspan='5' style='text-align:center; color:#7f8c8d;'>No mobile resistance elements detected</td></tr>"
+        
+        if [[ -f "$mob_csv" ]]; then
+            mob_html=$(python3 - "$mob_csv" "$MAIN_ID_VAL" <<'PYMOB'
+import sys, pandas as pd
+try:
+    df = pd.read_csv(sys.argv[1])
+    if df.empty: sys.exit(0)
+    main_id = sys.argv[2].strip()
+    rows = ""
+    for _, r in df.iterrows():
+        gene = str(r.iloc[5])
+        contig = str(r.iloc[1])
+        cls = str(r.iloc[10])
+        score = float(r.iloc[-1])
+        risk = "HIGH" if score >= 0.8 else "LOW"
+        c_id = contig.split()[0].strip()
+        color = '#2c3e50'
+        
+        if c_id != main_id: color = '#e74c3c'
+        elif 'virulence' in cls.lower(): color = '#000000'
+        elif any(x in cls.lower() for x in ['beta-lactam', 'penicillin', 'carbapenem']): color = '#3498db'
+        elif 'tetracycline' in cls.lower(): color = '#9b59b6'
+        elif 'aminoglycoside' in cls.lower(): color = '#e67e22'
+        elif any(x in cls.lower() for x in ['macrolide', 'lincosamide', 'streptogramin']): color = '#f1c40f'
+        elif 'quinolone' in cls.lower() or 'fluoroquinolone' in cls.lower(): color = '#27ae60'
+        elif risk == 'HIGH': color = '#e74c3c'
+
+        r_class = "class='risk-high'" if risk == 'HIGH' else ""
+        rows += f"<tr><td><span style='border-left:4px solid {color};padding-left:10px;font-weight:600;'>{gene}</span></td><td>{contig}</td><td>{cls}</td><td>{score:.2f}</td><td><span {r_class}>{risk}</span></td></tr>"
+    if rows: print(rows)
+except Exception:
+    pass
+PYMOB
+            )
+            [[ -z "$mob_html" ]] && mob_html="<tr><td colspan='5' style='text-align:center; color:#7f8c8d;'>No mobile resistance elements detected</td></tr>"
+        fi
+
+        mobile_section="<section class='card'>
+            <h2>Mobile Resistome &amp; Genomic Plasticity</h2>
+            <p style='color:#7f8c8d; font-size:0.85rem; margin-bottom:1rem; line-height:1.5;'>
+                This section tracks antimicrobial resistance (AMR) genes located on mobile genetic elements, such as plasmids. Unlike chromosomal mutations, plasmid-borne resistance can easily transfer horizontally between different bacteria, representing a much higher risk for the rapid spread of drug resistance.
+            </p>
+            <div class='alert-box alert-red'>
+                <strong>Plasmid-borne AMR detected:</strong>
+                <span class='big-num'>${HIGH_RISK_COUNT:-0}</span>
+            </div>
+            <table class='resistome-table' id='resTable'>
+                <thead><tr><th>Gene</th><th>Contig</th><th>Class</th><th>Score</th><th>Risk</th></tr></thead>
+                <tbody>${mob_html}</tbody>
+            </table>
+            <ul style='color:#7f8c8d; font-size:0.85rem; line-height:1.6; margin-top:1rem;'>
+                <li><strong>Gene:</strong> The specific antimicrobial resistance gene identified by the pipeline.</li>
+                <li><strong>Contig:</strong> The assembled sequence (e.g., a specific plasmid) where the gene is physically located.</li>
+                <li><strong>Class:</strong> The category of antibiotics to which this gene confers resistance.</li>
+                <li><strong>Score:</strong> The confidence metric or identity match percentage for the gene detection.</li>
+                <li><strong>Risk:</strong> The potential clinical or epidemiological threat level associated with this specific resistance profile.</li>
+            </ul>
+        </section>"
+    fi
+
+    # Prophage section (geNomad)
+    phage_section=""
+    if [[ "${RUN_GENOMAD}" == "true" ]]; then
+        local phage_tsv=$(find "$OUTDIR/genomad" -name "*_virus_summary.tsv" 2>/dev/null | head -n1 || true)
+        local phage_html="<tr><td colspan='4' style='text-align:center; color:#7f8c8d;'>No prophages detected</td></tr>"
+
+        if [[ -f "$phage_tsv" ]]; then
+            phage_html=$(python3 - "$phage_tsv" <<'PYPHAGE'
+import sys, pandas as pd
+try:
+    df = pd.read_csv(sys.argv[1], sep='\t')
+    if df.empty: sys.exit(0)
+    rows=""
+    for _, r in df.iterrows():
+        contig = str(r.get('seq_name', 'N/A'))
+        length = f"{int(r.get('length', 0)):,} bp"
+        score = float(r.get('virus_score', 0))
+        ptype = "Intact" if score >= 0.8 else "Incomplete"
+        rows += f"<tr><td><strong>{contig}</strong></td><td>{length}</td><td>{score:.2f}</td><td><span class='phage-tag'>{ptype}</span></td></tr>"
+    if rows: print(rows)
+except Exception:
+    pass
+PYPHAGE
+            )
+            [[ -z "$phage_html" ]] && phage_html="<tr><td colspan='4' style='text-align:center; color:#7f8c8d;'>No prophages detected</td></tr>"
+        fi
+
+        phage_section="<section class='card'>
+            <h2>Prophage Tracker</h2>
+            <p style='color:#7f8c8d; font-size:0.85rem; margin-bottom:1rem; line-height:1.5;'>
+                Prophages are viral sequences (bacteriophages) that have integrated directly into the bacterial DNA. They act as major drivers of bacterial evolution and often carry accessory genes—such as virulence factors or toxins—that can enhance the organism's adaptability and pathogenicity.
+            </p>
+            <div class='alert-box alert-green'>
+                <strong>Total Prophages Detected:</strong>
+                <span class='big-num'>${PHAGE_COUNT:-0}</span>
+            </div>
+            <table class='resistome-table' id='pTable'>
+                <thead><tr><th>Contig ID</th><th>Length</th><th>Score</th><th>Type</th></tr></thead>
+                <tbody>${phage_html}</tbody>
+            </table>
+            <ul style='color:#7f8c8d; font-size:0.85rem; line-height:1.6; margin-top:1rem;'>
+                <li><strong>Contig ID:</strong> The specific genomic region where the viral DNA is integrated.</li>
+                <li><strong>Length:</strong> The total size of the integrated viral sequence in base pairs.</li>
+                <li><strong>Score:</strong> The probability or confidence metric indicating the likelihood that the sequence is a true prophage (higher is better).</li>
+                <li><strong>Type:</strong> The classification of the viral sequence (e.g., intact, incomplete, or questionable).</li>
+            </ul>
+        </section>"
+    fi
+
+        # Integron section (IntegronFinder)
+    integron_section=""
+    if [[ "$RUN_INTEGRONS" == "true" ]]; then
+        # Find both files dynamically based on their actual extensions
+        local int_summ=$(find "$OUTDIR/integron_detection" -name "*.summary" 2>/dev/null | head -n1 || true)
+        local int_details=$(find "$OUTDIR/integron_detection" -name "*.integrons" 2>/dev/null | head -n1 || true)
+        
+        local int_html="<tr><td colspan='6' style='text-align:center; color:#7f8c8d;'>No integrons detected</td></tr>"
+        local int_total="0"
+
+        if [[ -f "$int_summ" ]]; then
+            int_html=$(python3 - "$int_summ" "$int_details" <<'PYINT'
+import sys, pandas as pd
+try:
+    # 1. Parse the summary file
+    df_sum = pd.read_csv(sys.argv[1], sep='\t', comment='#')
+    if df_sum.empty: sys.exit(0)
+    
+    # 2. Parse the details file to get the genetic contents (if it exists)
+    contents_map = {}
+    details_file = sys.argv[2].strip()
+    if details_file:
+        try:
+            df_int = pd.read_csv(details_file, sep='\t', comment='#')
+            if not df_int.empty:
+                # Group all genetic elements by the replicon they belong to
+                for rep, group in df_int.groupby('ID_replicon'):
+                    elements = []
+                    for val in group['annotation'].dropna():
+                        val_str = str(val)
+                        # Clean up messy database names (e.g., 'trim_DfrA1_like-NCBIFAM' -> 'trim_DfrA1')
+                        clean_val = val_str.split('-NCBIFAM')[0].replace('_like', '')
+                        elements.append(f"<span style='background:#f1f2f6; padding:2px 6px; border-radius:4px; border:1px solid #dcdde1; margin-right:4px; display:inline-block; margin-bottom:4px;'>{clean_val}</span>")
+                    contents_map[str(rep)] = "".join(elements)
+        except:
+            pass
+            
+    # 3. Build the HTML rows
+    rows=""
+    for _, r in df_sum.iterrows():
+        comp = int(r.get('complete', 0))
+        in0 = int(r.get('In0', 0))
+        calin = int(r.get('CALIN', 0))
+        tot = comp + in0 + calin
+        
+        # Hide contigs with 0 integrons
+        if tot == 0:
+            continue
+            
+        replicon = str(r.get('ID_replicon', r.get('replicon', 'N/A')))
+        contents = contents_map.get(replicon, "<span style='color:#7f8c8d; font-style:italic;'>Unknown</span>")
+        
+        rows += (
+            f"<tr>"
+            f"<td><strong>{replicon}</strong></td>"
+            f"<td>{comp}</td><td>{in0}</td><td>{calin}</td>"
+            f"<td><strong>{tot}</strong></td>"
+            f"<td style='font-size:0.85em; max-width: 300px; line-height: 1.6;'>{contents}</td>"
+            f"</tr>"
+        )
+        
+    if rows: print(rows)
+except Exception:
+    pass
+PYINT
+            )
+            [[ -z "$int_html" ]] && int_html="<tr><td colspan='6' style='text-align:center; color:#7f8c8d;'>No integrons detected</td></tr>"
+            
+            # Recalculate total for the badge
+            int_total=$(awk -F'\t' '!/^#/ && $1!~"replicon" {sum += $2 + $3 + $4} END {print sum+0}' "$int_summ" 2>/dev/null || echo "0")
+        fi
+
+        integron_section="<section class='card'>
+            <h2>Integron Profile</h2>
+            <p style='color:#7f8c8d; font-size:0.85rem; margin-bottom:1rem; line-height:1.5;'>
+                Integrons are genetic elements capable of capturing and expressing mobile gene cassettes via site-specific recombination.
+            </p>
+            <div class='alert-box alert-blue'>
+                <strong>Total Integrons Detected:</strong>
+                <span class='big-num'>${int_total}</span>
+            </div>
+            <table class='resistome-table' id='integronTable'>
+                <thead>
+                    <tr>
+                        <th>Replicon</th>
+                        <th>Complete Integrons</th>
+                        <th>In0 (Integrase only)</th>
+                        <th>CALIN (attC clusters)</th>
+                        <th>Total</th>
+                        <th>Integron Contents</th>
+                    </tr>
+                </thead>
+                <tbody>${int_html}</tbody>
+            </table>
+            <ul style='color:#7f8c8d; font-size:0.85rem; line-height:1.6; margin-top:1rem;'>
+                <li><strong>Replicon:</strong> The genomic contig or plasmid where the integron structure was localized.</li>
+                <li><strong>Complete Integrons:</strong> Structures containing both the integrase gene and an adjacent attC site cluster.</li>
+                <li><strong>In0 (Integrase only):</strong> Isolated integrase genes lacking detectable nearby attC cassettes.</li>
+                <li><strong>CALIN (attC clusters):</strong> Clusters of attC sites lacking an identifiable integrase gene.</li>
+                <li><strong>Total:</strong> The combined count of all integron-related structures found on this replicon.</li>
+                <li><strong>Integron Contents:</strong> The predicted structural elements (e.g., attC, intI) and captured functional genes (e.g., AMR or virulence cassettes) found within the integron.</li>
+            </ul>
+        </section>"
+    fi
+    
     cat <<EOF > "$html_out"
 <!DOCTYPE html>
 <html lang="en">
@@ -534,6 +757,7 @@ PYAMR
         --accent:   #3498db;
         --red:      #c62828;
         --green:    #2e7d32;
+        --blue:     #e1f5fe;
     }
     body {
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -583,6 +807,7 @@ PYAMR
     }
     .alert-red   { background: #fff5f5; border-left: 5px solid var(--red);   }
     .alert-green { background: #f0fff4; border-left: 5px solid var(--green); }
+    .alert-blue  { background: #e1f5fe; border-left: 5px solid var(--blue);  }
     table { width: 100%; border-collapse: collapse; }
     th { padding: 12px 8px; border-bottom: 2px solid var(--border); text-align: left; font-size: 0.85rem; }
     td { padding: 10px 8px; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
@@ -590,10 +815,18 @@ PYAMR
     .map-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(480px, 1fr)); gap: 30px; }
     .map-card { text-align: center; background: white; border: 1px solid var(--border); padding: 15px; border-radius: 12px; }
     .map-card h4 { margin: 0 0 10px; font-size: 0.9rem; color: #7f8c8d; }
-    .map-zoom-container { overflow: hidden; border-radius: 8px; cursor: zoom-in; }
-    .map-zoom-container img { width: 100%; transition: transform 0.35s ease; display: block; }
+    .map-zoom-container { overflow: hidden; border-radius: 8px; cursor: zoom-in; position: relative; }
+    .map-zoom-container img { 
+        width: 100%; 
+        display: block; 
+        transition: transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94); 
+        will-change: transform; /* Forces GPU hardware acceleration */
+        transform-origin: center center;
+        pointer-events: none; /* Prevents accidental dragging of the image */ 
+    }
     .map-zoom-container.zoomed { cursor: zoom-out; }
-    .map-zoom-container.zoomed img { transform: scale(3.0); }
+    .map-zoom-container.zoomed img { transform: scale(3.5) translateZ(0); } /* translateZ pushes it to the 3D GPU layer */
+
     .legend-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -637,8 +870,9 @@ PYAMR
 ${METRICS_BLOCK}
 ${mobile_section}
 ${phage_section}
+${integron_section}
 <div class="card">
-    <h2>Colour Legend</h2>
+    <h2>Colour Legend for circular genomes</h2>
     <div class="legend-grid">
         <div class="legend-item"><div class="swatch" style="background:#3498db;"></div>Beta-lactams</div>
         <div class="legend-item"><div class="swatch" style="background:#9b59b6;"></div>Tetracyclines</div>
@@ -648,7 +882,8 @@ ${phage_section}
         <div class="legend-item"><div class="swatch" style="background:#000000;"></div>Virulence</div>
         <div class="legend-item"><div class="swatch" style="background:#2e7d32;"></div>Prophage</div>
         <div class="legend-item"><div class="swatch" style="background:#e74c3c;"></div>Plasmid-borne</div>
-        <div class="legend-item"><div class="swatch" style="background:#00f2ff; border-color:#aaa;"></div>ICE</div>
+        <div class="legend-item"><div class="swatch" style="background:#00f2ff; border-color:#aaa;"></div>ICE</div>  
+        <div class="legend-item"><div class="swatch" style="background:#e84393; border-color:#aaa;"></div>Integron</div>
     </div>
 </div>
 ${maps_section}
@@ -679,77 +914,62 @@ ${full_amr_section}
 </div>
 
 <script>
-    const MAIN_ID = "${MAIN_ID_VAL}";
-    const pData = ${PHAGE_JS_DATA:-[]};
-    const rData = ${RESISTOME_JS_DATA:-[]};
-
-    // Populate mobile resistome table
-    const resBody = document.querySelector('#resTable tbody');
-    if (resBody && rData.length > 0) {
-        rData.forEach(r => {
-            let cls = r.class || 'Other';
-            let type = (r.type || "").toLowerCase();
-            let color = '#2c3e50'; // Default: Dark Grey
-
-            // 1. ULTIMATE PRIORITY: Is it on a plasmid?
-            // If the contig name doesn't match the main one, it's ALWAYS RED.
-            if (r.contig && r.contig !== MAIN_ID) {
-                color = '#e74c3c'; 
-            } 
-            // 2. SECOND PRIORITY: Is it Virulence?
-            // If it's on the main chromosome and it's virulence, it's ALWAYS BLACK.
-            else if (cls.toLowerCase().includes('virulence') || type === 'virulence') {
-                color = '#000000';
-            }
-            // 3. THIRD PRIORITY: Standard colors for Main Chromosome
-            else {
-                const c = cls.toLowerCase();
-                if (c.includes('beta-lactam') || c.includes('penicillin')) color = '#3498db';
-                else if (c.includes('tetracycline'))   color = '#9b59b6';
-                else if (c.includes('aminoglycoside')) color = '#e67e22'; 
-                else if (c.includes('macrolide'))      color = '#f1c40f';
-                else if (c.includes('quinolone'))      color = '#27ae60';
-                else if (c.includes('ice') || c.includes('mobilome')) color = '#00f2ff';
+    // Circular Map Zoom Logic
+    document.addEventListener("DOMContentLoaded", function() {
+        var containers = document.querySelectorAll('.map-zoom-container');
+        
+        containers.forEach(function(container) {
+            var img = container.querySelector('img');
+            if (!img) return;
+            
+            container.addEventListener('mousemove', function(e) {
+                if (!container.classList.contains('zoomed')) return;
+                var r = container.getBoundingClientRect();
+                var x = ((e.clientX - r.left) / r.width) * 100;
+                var y = ((e.clientY - r.top) / r.height) * 100;
                 
-                // Only if it's NOT virulence and ON the main chromosome do we use 
-                // Red for "HIGH risk" flags from AMRFinder
-                else if (r.risk === 'HIGH') color = '#e74c3c';
-            }
+                // Disable transition while moving to prevent lag
+                img.style.transition = 'none';
+                img.style.transformOrigin = x + "% " + y + "%";
+            });
 
-            const tr = document.createElement('tr');
-            tr.innerHTML =
-                \`<td><span style="border-left:4px solid \${color};padding-left:10px;font-weight:600;">\${r.gene}</span></td>\` +
-                \`<td>\${r.contig}</td><td>\${cls}</td><td>\${r.score || 'N/A'}</td>\` +
-                \`<td><span class="\${r.risk === 'HIGH' ? 'risk-high' : ''}">\${r.risk}</span></td>\`;
-            resBody.appendChild(tr);
-        });
-    }
+            container.addEventListener('click', function(e) {
+                var r = container.getBoundingClientRect();
+                var x = ((e.clientX - r.left) / r.width) * 100;
+                var y = ((e.clientY - r.top) / r.height) * 100;
 
-    // Populate prophage table
-    const phageBody = document.querySelector('#pTable tbody');
-    if (phageBody && pData.length > 0) {
-        pData.forEach(p => {
-            const tr = document.createElement('tr');
-            tr.innerHTML =
-                \`<td>\${p.contig}</td><td>\${p.size}</td><td>\${p.score}</td>\` +
-                \`<td><span class="phage-tag">Prophage</span></td>\`;
-            phageBody.appendChild(tr);
-        });
-    }
+                if (!container.classList.contains('zoomed')) {
+                    // Restore transition for the zoom-in animation
+                    img.style.transition = 'transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+                    img.style.transformOrigin = x + "% " + y + "%";
+                    container.classList.add('zoomed');
+                } else {
+                    img.style.transition = 'transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+                    container.classList.remove('zoomed');
+                    setTimeout(function() {
+                        if (!container.classList.contains('zoomed')) {
+                            img.style.transformOrigin = 'center center';
+                        }
+                    }, 350); 
+                }
+            });
 
-    // Circular map zoom — follows cursor position
-    document.querySelectorAll('.map-zoom-container').forEach(container => {
-        const img = container.querySelector('img');
-        container.addEventListener('mousemove', e => {
-            if (!container.classList.contains('zoomed')) return;
-            const r = container.getBoundingClientRect();
-            img.style.transformOrigin =
-                \`\${((e.clientX - r.left) / r.width) * 100}% \` +
-                \`\${((e.clientY - r.top)  / r.height) * 100}%\`;
+            // Auto-zoom out if the mouse leaves the container entirely
+            container.addEventListener('mouseleave', function() {
+                if (container.classList.contains('zoomed')) {
+                    img.style.transition = 'transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+                    container.classList.remove('zoomed');
+                    setTimeout(function() {
+                        if (!container.classList.contains('zoomed')) {
+                            img.style.transformOrigin = 'center center';
+                        }
+                    }, 350);
+                }
+            });
         });
-        container.addEventListener('click', () => container.classList.toggle('zoomed'));
     });
 </script>
+
 </body>
 </html>
 EOF
@@ -774,6 +994,8 @@ while [[ $# -gt 0 ]]; do
         --kraken2-db|-k)    KRAKEN2_DB="$2"; RUN_KRAKEN2=true; shift 2 ;;
         --confidence|-c)    KRAKEN_CONFIDENCE="$2";        shift 2 ;;
         --ice|-I)           RUN_ICE=true;                  shift 1 ;;
+        --integrons|-y)     RUN_INTEGRONS=true;            shift 1 ;;
+        --eval|-Y)          USER_INTEGRON_EVALUE="$2";     shift 2 ;;
         --plasticity|-s)    RUN_GENOMAD=true;              shift 1 ;;
         --genomad-db|-G)    GENOMAD_DB="$2";               shift 2 ;;
         --meta|-M)          USE_META="--meta";             shift 1 ;;
@@ -835,6 +1057,7 @@ fi
 [[ "$RUN_ICE" == "true" ]]     && REQUIRED_TOOLS+=("macsyfinder")
 [[ "$RUN_GENOMAD" == "true" ]] && REQUIRED_TOOLS+=("genomad")
 [[ "$RUN_KRAKEN2" == "true" ]] && REQUIRED_TOOLS+=("kraken2")
+[[ "$RUN_INTEGRONS" == "true" ]] && REQUIRED_TOOLS+=("integron_finder")
 
 # Verify tools exist AND live inside the active Conda environment
 for tool in "${REQUIRED_TOOLS[@]}"; do
@@ -863,11 +1086,11 @@ if [[ -z "$BAKTA_DB" || ! -d "$BAKTA_DB" ]]; then
     SKIP_BAKTA=true
 fi
 if [[ -z "$KRAKEN2_DB" || ! -d "$KRAKEN2_DB" ]]; then
-    echo "[INFO] Kraken2 database not found — taxonomy will be skipped."
+    echo "[WARNING] Kraken2 database not found — taxonomy will be skipped."
     RUN_KRAKEN2=false
 fi
 if [[ -z "$GENOMAD_DB" || ! -d "$GENOMAD_DB" ]]; then
-    echo "[INFO] geNomad database not found — plasticity analysis will be skipped."
+    echo "[WARNING] geNomad database not found — plasticity analysis will be skipped."
     RUN_GENOMAD=false
 fi
 
@@ -1009,7 +1232,7 @@ if command -v circlator &>/dev/null; then
         echo "[INFO] Circlator did not find dnaA. Assembly left un-rotated." >> "$OUTDIR/logs/circlator.log"
     fi
 else
-    run_step "Standardising Origin (Circlator)" "false" ""
+    run_step "Fix Assembly Origin (Circlator)" "false" ""
 fi
 
 
@@ -1083,7 +1306,7 @@ if [[ "$RUN_ICE" == "true" ]]; then
                 --worker $THREADS \
                 >'$OUTDIR/logs/macsyfinder.log' 2>&1"
     else
-        echo "[WARNING] No .faa file in $OUTDIR/annotation/ — skipping ICE detection."
+        echo "[WARNING] No .faa file in $OUTDIR/annotation/ — skipping ICE detection." >> "$OUTDIR/logs/pipeline_warnings.log"
         run_step "ICE Detection (MacSyFinder)" "false" ""
     fi
 else
@@ -1100,6 +1323,7 @@ if [[ "$RUN_ICE" == "true" && -d "$OUTDIR/ice_detection" ]]; then
 python3 - <<PYICE
 import os, pandas as pd, re
 from io import StringIO
+from statistics import median
 
 def read_msf(path):
     with open(path) as f:
@@ -1112,6 +1336,11 @@ if not active_systems: exit(0)
 
 best = read_msf('$BEST_SOL')
 best = best[best['model_fqn'].isin(active_systems)]
+
+MIN_WHOLENESS = 0.5
+best = best[best['sys_wholeness'] >= MIN_WHOLENESS]
+if best.empty:
+    exit(0)
 
 # Get the source of truth from GFF (maps locus_tag to real contig ID)
 gff_path = next(
@@ -1131,30 +1360,177 @@ if gff_path:
             lt = re.search(r'locus_tag=([^;]+)', p[8])
             if lt: coord_map[lt.group(1)] = (p[0], int(p[3]), int(p[4]), p[6])
 
-# Build regions using the REAL contig name from the GFF (e.g., contig_1)
+sys_hits = {}
+sys_score = {}
+for sys_id, group in best.groupby('sys_id'):
+    sys_hits[sys_id] = set(group['hit_id'])
+    sys_score[sys_id] = group['sys_wholeness'].iloc[0]
+
+to_drop = set()
+sys_ids = list(sys_hits)
+for i, a in enumerate(sys_ids):
+    for b in sys_ids[i+1:]:
+        overlap = len(sys_hits[a] & sys_hits[b])
+        smaller = min(len(sys_hits[a]), len(sys_hits[b]))
+        if smaller and overlap / smaller > 0.5:
+            loser = a if sys_score[a] < sys_score[b] else b
+            to_drop.add(loser)
+
 out_rows = []
-for sys_id, group in best.groupby('model_fqn'):
-    hits = [coord_map[hid] for hid in group['hit_id'] if hid in coord_map]
-    if hits:
-        out_rows.append([hits[0][0], sys_id.split('/')[-1], min(h[1] for h in hits), max(h[2] for h in hits), hits[0][3]])
+MAX_CLUSTER_SPREAD = 100_000  
+
+for sys_id, group in best.groupby('sys_id'):
+    if sys_id in to_drop:
+        continue
+
+    raw_hits = [coord_map[hid] for hid in group['hit_id'] if hid in coord_map]
+    if not raw_hits:
+        continue
+
+    # Restrict to the dominant contig for this system
+    contigs = [h[0] for h in raw_hits]
+    main_contig = max(set(contigs), key=contigs.count)
+    same_contig = [h for h in raw_hits if h[0] == main_contig]
+
+    # Drop hits far from the main cluster's median midpoint
+    midpoints = [(h[1] + h[2]) / 2 for h in same_contig]
+    med = median(midpoints)
+    hits = [h for h, mid in zip(same_contig, midpoints)
+            if abs(mid - med) <= MAX_CLUSTER_SPREAD] or same_contig
+
+    model_name = group['model_fqn'].iloc[0].split('/')[-1]
+    out_rows.append([hits[0][0], model_name, min(h[1] for h in hits), max(h[2] for h in hits), hits[0][3]])
 
 if out_rows:
     pd.DataFrame(out_rows).to_csv('$ICE_FILE', sep='\t', index=False, header=False)
+
 PYICE
     else
         echo "[WARNING] MacSyFinder output files are incomplete — cannot parse ICE locations."
     fi
-fi    
-
+fi 
 
 # ==============================================================================
-#  Step 11 — Genomic Plasticity (geNomad)  [optional]
+#  Step 11 — Integron Detection (IntegronFinder)  [optional]
+# ==============================================================================
+INTEGRON_EVALUE="${USER_INTEGRON_EVALUE:-1e-9}"   # Adjust after checking real output distributions
+
+if [[ "$RUN_INTEGRONS" == "true" ]]; then
+    run_step "Integron Detection (IntegronFinder)" "true" \
+        "rm -rf '$OUTDIR/integron_detection' && integron_finder \
+            --local-max \
+            --gbk \
+            --func-annot \
+            --cpu $THREADS \
+            --outdir '$OUTDIR/integron_detection' \
+            '$FINAL_ASM' \
+            >'$OUTDIR/logs/integron_finder.log' 2>&1"
+
+    INTEGRON_TSV=$(find "$OUTDIR/integron_detection" -name "*.integrons" 2>/dev/null | head -n1 || true)
+    INTEGRON_SUMMARY=$(find "$OUTDIR/integron_detection" -name "*.summary" 2>/dev/null | head -n1 || true)
+
+        if [[ -f "$INTEGRON_TSV" ]]; then
+        python3 - <<PYINTEGRON
+import pandas as pd
+import traceback
+import os
+
+try:
+    # Read the file
+    try:
+        df = pd.read_csv('$INTEGRON_TSV', sep='\t', comment='#')
+    except pd.errors.EmptyDataError:
+        df = pd.DataFrame()  # Create an empty dataframe if no data exists
+
+    out_rows = []
+    
+    # Only process if dataframe is not empty
+    if not df.empty:
+        # Ensure evalue is numeric (coerces weird strings to NaN), then fill NaN with 0
+        df['evalue'] = pd.to_numeric(df['evalue'], errors='coerce').fillna(0)
+        
+        # Filter based on threshold
+        df = df[df['evalue'] <= float('$INTEGRON_EVALUE')]
+
+        # GROUP BY Integron ID to create one solid block per integron!
+        if 'ID_integron' in df.columns:
+            for integron_id, group in df.groupby('ID_integron'):
+                replicon = group['ID_replicon'].iloc[0]
+                start = group['pos_beg'].min()
+                end = group['pos_end'].max()
+                strand = group['strand'].iloc[0]
+                
+                # Name it "Integron" so the map script colors it Deep Pink
+                out_rows.append([replicon, "Integron", start, end, strand])
+
+    if out_rows:
+        # Append to ICE_FILE so they get plotted on the circular map!
+        pd.DataFrame(out_rows).to_csv('$ICE_FILE', sep='\t', index=False, header=False, mode='a')
+
+    # --- REPORT GENERATION ---
+    summary_file = '$INTEGRON_SUMMARY'
+    report_out = '$OUTDIR/reports/integron_summary.md'
+    
+    # Ensure report directory exists
+    os.makedirs(os.path.dirname(report_out), exist_ok=True)
+    
+    if os.path.exists(summary_file) and os.path.getsize(summary_file) > 0:
+        try:
+            # Added comment='#' here as well to prevent pandas from crashing on the header!
+            df_sum = pd.read_csv(summary_file, sep='\t', comment='#')
+        except pd.errors.EmptyDataError:
+            df_sum = pd.DataFrame()
+            
+        if not df_sum.empty:
+            # Get sums of different integron types (default to 0 if column is somehow missing)
+            tot_calin = df_sum['CALIN'].sum() if 'CALIN' in df_sum.columns else 0
+            tot_in0 = df_sum['In0'].sum() if 'In0' in df_sum.columns else 0
+            tot_complete = df_sum['complete'].sum() if 'complete' in df_sum.columns else 0
+            
+            with open(report_out, 'w') as f:
+                f.write("### Integron Profile\n\n")
+                f.write("| Element Type | Count |\n")
+                f.write("|--------------|-------|\n")
+                f.write(f"| Complete Integrons | {tot_complete} |\n")
+                f.write(f"| In0 (Integrase only) | {tot_in0} |\n")
+                f.write(f"| CALIN (attC clusters) | {tot_calin} |\n\n")
+                
+                f.write("**Breakdown by Replicon:**\n\n")
+                
+                # Generate a manual Markdown table to avoid needing the 'tabulate' pip package
+                cols = df_sum.columns.tolist()
+                f.write("| " + " | ".join(cols) + " |\n")
+                f.write("|" + "|".join(["---"] * len(cols)) + "|\n")
+                for _, row in df_sum.iterrows():
+                    row_vals = [str(row[c]) for c in cols]
+                    f.write("| " + " | ".join(row_vals) + " |\n")
+                f.write("\n")
+        else:
+            with open(report_out, 'w') as f:
+                f.write("### Integron Profile\n\nNo integrons found in this assembly.\n")
+    else:
+        with open(report_out, 'w') as f:
+            f.write("### Integron Profile\n\nNo integrons found in this assembly.\n")
+
+except Exception:
+    with open('$OUTDIR/logs/integron_parse_error.log', 'w') as fh:
+        fh.write(traceback.format_exc())
+PYINTEGRON
+    else
+        echo "[WARNING] No .integrons file found — skipping integron plotting integration."
+    fi
+else
+    run_step "Integron Detection (IntegronFinder)" "false" ""
+fi
+
+# ==============================================================================
+#  Step 12 — Genomic Plasticity (geNomad)  [optional]
 # ==============================================================================
 PHAGE_FILE="$OUTDIR/amr_results/prophage_locations.tmp"
 export PHAGE_FILE
 : > "$PHAGE_FILE"
 
-if [[ "$RUN_GENOMAD" == "true" ]]; then
+if [[ "$RUN_GENOMAD" == "true" && -d "$GENOMAD_DB" ]]; then
     run_step "Plasticity (geNomad)" "true" \
         "genomad end-to-end \
             --cleanup --splits 8 --threads $THREADS \
@@ -1242,7 +1618,7 @@ else
 fi
 
 # ==============================================================================
-#  Step 12 — Circular Genome Maps (Python/Matplotlib)
+#  Step 13 — Circular Genome Maps (Python/Matplotlib)
 # ==============================================================================
 export OUTDIR FINAL_ASM ASM_SPECIES_FULL \
        AMR_FILE="$OUTDIR/amr_results/AMR_Report.tsv" \
@@ -1372,9 +1748,17 @@ def draw_map(record, filename, centre_label, ice_df, phage_df, amr_df, is_main=F
             strand = str(row['Strand']).strip()
             size_kb = (float(row['Stop']) - float(row['Start'])) / 1000
 
+            # Check if this element is an Integron or an ICE
+            symbol_name = str(row['Symbol'])
+            is_integron = 'Integron' in symbol_name
+            
+            # Use Deep Pink for Integrons, Cyan for ICE
+            arc_color = '#e84393' if is_integron else '#00f2ff'
+            txt_color = '#b71540' if is_integron else '#006080'
+
             # ICE arc
             ax.plot(np.linspace(s, e, 100), [0.85] * 100,
-                    color='#00f2ff', lw=8, alpha=0.9,
+                    color=arc_color, lw=8, alpha=0.9,
                     solid_capstyle='butt', zorder=9)
 
             # Arrow indicating direction
@@ -1532,7 +1916,7 @@ try:
     chrom_gc = calc_gc(chrom.seq) * 100 
     
     draw_map(chrom,
-            filename="01_Main_Chromosome.png",
+            filename="01_Chromosome.png",
             centre_label=f"{len(chrom.seq):,} bp\nGC: {chrom_gc:.1f}%\n{species}", 
             ice_df=ice_df,
             phage_df=phage_df,
@@ -1544,7 +1928,7 @@ try:
         rec_gc = calc_gc(rec.seq) * 100 
         draw_map(rec,
                 filename=f"{i+1:02d}_Extrachromosomal_{i}.png",
-                centre_label=f"Plasmid\n{len(rec.seq)/1000:.1f} kb\n{str(rec.id).split()[0]}",
+                centre_label=f"Plasmid\n{len(rec.seq)/1000:.1f} kb\nGC: {rec_gc:.1f}%\n{str(rec.id).split()[0]}",
                 ice_df=ice_df,
                 phage_df=phage_df,
                 amr_df=amr_df,
@@ -1588,11 +1972,18 @@ fi
 # ==============================================================================
 #  Build HTML component strings
 # ==============================================================================
-TAX_CARDS="<div class='qc-card'>
-    <span class='qc-label'>Identified Species</span>
-    <span class='qc-val'>${ASM_SPECIES_FULL}</span>
+TAX_CARDS=""
+if [[ "$RUN_KRAKEN2" == "true" ]]; then
+    TAX_CARDS="<div class='qc-card'>
+        <span class='qc-label'>Taxonomy report</span>
+        <span class='qc-val' style='color:#2e7d32; font-weight:600;'>${ASM_SPECIES_FULL:-Unknown}</span>
+        <span class='qc-sub' style='color:#7f8c8d; font-size:0.8rem; display:block; margin-top:0.3rem;'>
+            The most likely match at the specified confidence score: ${KRAKEN_CONFIDENCE}. 
+            Note that if no species-level match is found, the report will show the closest higher-level taxon. 
+        </span>
 </div>"
-
+fi
+    
 if [[ -n "$R1" ]]; then
     HYBRID_CARDS="<div class='qc-card'>
         <span class='qc-label'>Hybrid Polishing</span>
@@ -1629,6 +2020,16 @@ METRICS_BLOCK="<div class='card'>
       </tr>
     </tbody>
   </table>
+  <p style='color:#7f8c8d; font-size:0.85rem; margin-top:1rem;'>
+      This table summarizes key assembly quality metrics before and after final polishing.
+  </p>
+  <ul style='color:#7f8c8d; font-size:0.85rem; line-height:1.6;'>
+      <li><strong>Total Length:</strong> The combined length of all assembled contigs, in base pairs. This should approximate the expected genome size for the organism.</li>
+      <li><strong>Contig Count:</strong> The number of separate, non-overlapping sequences produced by assembly. A single circular chromosome ideally assembles as 1 contig; additional contigs may represent plasmids, extrachromosomal elements, or — in a less complete assembly — unresolved chromosomal fragments.</li>
+      <li><strong>N50:</strong> A standard measure of assembly contiguity: the length of the shortest contig needed, when contigs are ordered largest to smallest, to cover at least 50% of the total assembly length. A higher N50 relative to contig count generally indicates a more contiguous, higher-quality assembly.</li>
+      <li><strong>After Medaka (ONT polish):</strong> Metrics following long-read consensus polishing with Medaka, before any further correction. </li>  
+      <li><strong>Final (polished):</strong> The final polishing/correction metric for either Hybrid or ONT-only mode. Note that in ONT-only mode, no additional polishing step is applied after Medaka.</li>
+  </ul>
 </div>"
 
 # ==============================================================================
@@ -1636,7 +2037,7 @@ METRICS_BLOCK="<div class='card'>
 # ==============================================================================
 run_step "Generating HTML Report" "true" "generate_html_report"
 
-# ==============================================================================
+# =================================================================r=============
 #  Step 14 — Cleanup Intermediate Files (Optional)
 # ==============================================================================
 if [[ "$CLEANUP" == "true" ]]; then

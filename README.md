@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/Illumina-short reads-yellow.svg" />
   <img src="https://img.shields.io/badge/python-3.9+-blue.svg" />
   <img src="https://img.shields.io/badge/Conda-Supported-lightblue.svg" />
-  <img src="https://img.shields.io/badge/v1.0.0-Initial release-green.svg" />
+  <img src="https://img.shields.io/badge/v1.0.5.svg" />
 </p>
 
 MOSTAR is comprehensive bioinformatics pipeline for microbial analysis of whole-genome Oxford Nanopore sequencing data (ONT-reads). The pipeline constructs highly-polished genomes (using hybrid- or non-hybrid assembly), in addition to performing functional annotation, AMR profiling, ICE detection, and taxonomic classification — with built-in quality controls and an interactive HTML report. 
@@ -51,6 +51,7 @@ This pipeline has been developed and tested on *S. aureus*, *B. fragilis*, as we
 * ICE detection — Integrative and Conjugative Elements (MacSyFinder / CONJScan)
 * Plasmid-borne AMR cross-referencing (geNomad + AMRFinder+)
 * Prophage detection and localisation (geNomad)
+* Integron detection (IntegronFinder)
 
 #### Output files
 A successful run will contain the following output, including the final polished fasta, HTML-report, as well as individual output files and logs from all the included tools. 
@@ -68,6 +69,7 @@ A successful run will contain the following output, including the final polished
   |- intermediate
   |- logs
   |- medaka
+  |- integron_detection
   |- taxonomy
   |- amr_summary.html
   |- MOSTAR_Final_Report.html
@@ -91,13 +93,14 @@ mostar --ont ont.fq.gz --genome-size [size] --output [dir] --model [model]
 # Run MOSTAR in Hybrid mode, assemble genome and perform AMR analysis.
 mostar --ont ont.fq.gz --genome-size [size] --output [dir] --model [model] --r1 R1.fq --r2 R2.fq 
   
-# The "Everything" Run (Taxonomy, Annotation, ICE, and Plasticity/Prophages):
+# The "Everything" Run (Taxonomy, Annotation, ICE, and Plasticity/Prophages/Integrons):
 mostar --ont ont_read.fastq.gz --r1 read1.fastq.gz --r2 read2.fastq.gz \
-  --genome-size 1.9m --output Output \
+  --genome-size X.Xm --output Output \
   --kraken2-db kraken2_db_path \
-  --bakta-db db-light_path --ice \
-  --genomad-db genomad_db_path --plasticity
-
+  --bakta-db db_path --ice \
+  --genomad-db genomad_db_path --plasticity \
+  --integrons \
+  --cleanup
 
 ##### DOCKER instructions #####
 
@@ -120,14 +123,15 @@ docker run --rm \
   --bakta-db /databases/db-light \
   --ice \
   --genomad-db /databases/genomad_db \
-  --plasticity
-
+  --plasticity \
+  --integrons \
+  --cleanup
 ```
 
 ### Installation 
 The installation supports both Conda and Docker. If however installing manually, the included YML will create a separate conda environment with all the required dependencies. The only manual step is downloading and configuring databases. For some manual installaltions, geNomad may become a dependency issue. If you encounter installation hang-ups, remove geNomad from the YML and install it separatly.
 
-### Install using Bioconda (recommended)
+### Install using Bioconda
 ```bash
 # To install MOSTAR in the current env
 conda install bioconda::mostar
@@ -184,9 +188,10 @@ docker run --rm \
   --bakta-db /databases/bakta_db \
   --ice \
   --genomad-db /databases/genomad_db \
-  --plasticity
-
-
+  --plasticity \
+  --integrons \
+  --cleanup
+  
 #Notes
 - `-v /path/to/your/data:/data` mounts your local data folder into the container — all input files and output results go here
 - `-v /path/to/databases:/databases` mounts your database folder — required for Kraken2, Bakta, and geNomad
@@ -269,6 +274,7 @@ genomad download-database .
 | Mobile element Detection | |
 | `--ice` | MacSyFinder | Use with --bakta-db [Default: disabled] |
 | `--plasticity` | geNomad | Plasticity and prophage tracker [Default: disabled] |
+| `--integrons` | IntegronFinder | Detect integrons [Default: disabled] |
 | Classification | |
 | `--kraken2-db` | Kraken2 | Requires path to pre-built Kraken2 database" |
 | `--confidence` | Kraken2 | Kraken2 confidence threshold [Default: 0.1 |

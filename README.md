@@ -13,7 +13,7 @@
   <img src="https://img.shields.io/badge/Illumina-short reads-yellow.svg" />
   <img src="https://img.shields.io/badge/python-3.9+-blue.svg" />
   <img src="https://img.shields.io/badge/Conda-Supported-lightblue.svg" />
-  <img src="https://img.shields.io/badge/v1.0.5.svg" />
+  <img src="https://img.shields.io/badge/v1.0.5-green.svg" />
 </p>
 
 MOSTAR is comprehensive bioinformatics pipeline for microbial analysis of whole-genome Oxford Nanopore sequencing data (ONT-reads). The pipeline constructs highly-polished genomes (using hybrid- or non-hybrid assembly), in addition to performing functional annotation, AMR profiling, ICE detection, and taxonomic classification — with built-in quality controls and an interactive HTML report. 
@@ -295,7 +295,7 @@ The report features key run-metrics from Medaka (and Polypolish if hybrid), incl
 ### Mobile Resistome & Genomic Plasticity
 By including geNomad in the pipeline, MOSTAR will also detect plasmid-borne AMR genes, in addition prophages and their locations. 
 <p align="left">
-  <img src="assets/Plasticity.png" 
+  <img src=".supplementary/Mobile_resitome_profile.png" 
        width="100%" alt="Mobile resistome and Plasticity">
 </p>
 

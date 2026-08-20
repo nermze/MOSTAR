@@ -1,7 +1,8 @@
 
 Mostar v1.0.5
 - Improved HTML report, added detailed description to each segment, as well visual enhancements.
-- Added a new tool, Integron Finder, run using --integron flag
+- Added a new tool, Integron Finder, run using --integrons flag
+- Integrons are visualized on the same track as ICE-elements. 
 - Various small bug fixes and improvements 
 
 Mostar v1.0.4
